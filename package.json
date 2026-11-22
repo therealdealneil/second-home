@@ -17,9 +17,9 @@
     "supabase": "supabase"
   },
   "devDependencies": {
-    "turbo": "latest",
-    "typescript": "~5.9.2",
-    "prettier": "latest",
-    "supabase": "latest"
+    "turbo": "^2.11.13",
+    "typescript": "~6.0.3",
+    "prettier": "^3.10.1",
+    "supabase": "^3.2.0"
   }
 }
