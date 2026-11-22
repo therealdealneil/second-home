@@ -8,7 +8,7 @@
 
 ---
 
-## 2. Database Schema (Supabase / PostgreSQL 16 + PostGIS)
+## 2. Database Schema (Supabase / PostgreSQL 17 + PostGIS)
 
 ```sql
 -- Enable required extensions
@@ -193,11 +193,14 @@ ALTER TABLE connections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE hometown_vouches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_reports ENABLE ROW LEVEL SECURITY;
 
--- 1. Column-level lock on exact GPS coordinates
-REVOKE SELECT (exact_current_geog) ON households FROM anon, authenticated;
-
--- 2. Column-level lock on phone numbers (only revealed via accepted connection RPC)
-REVOKE SELECT (phone_e164) ON users FROM anon, authenticated;
+-- 1 & 2. Column locks on exact GPS, invite code and phone numbers.
+-- NOTE: `REVOKE SELECT (col)` alone is ineffective on Supabase, where anon/authenticated
+-- hold table-level SELECT by default. Revoke at table level, then grant an explicit column
+-- list (new columns stay private until added). See supabase/migrations/0001_initial_schema.sql.
+REVOKE ALL ON households FROM anon, authenticated;
+GRANT SELECT (id, display_label, life_stage, public_current_geog, h3_index_res7,
+  neighborhood_name, is_verified_local, created_at, updated_at) ON households TO authenticated;
+-- users: grant every column EXCEPT phone_e164 (phone is released only via get_whatsapp_handoff_link)
 
 -- 3. Authenticated users can read active user profiles (excluding revoked columns)
 CREATE POLICY "Active users are viewable by authenticated users"

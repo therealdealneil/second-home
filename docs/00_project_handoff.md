@@ -42,7 +42,7 @@ Initialize a **Turborepo** TypeScript monorepo with the following structure:
 ```
 
 ### Core Services
-- **Database & Auth:** Supabase (PostgreSQL 16 + PostGIS + Auth with Apple, Google, and SMS OTP).
+- **Database & Auth:** Supabase (PostgreSQL 17 + PostGIS + Auth with Apple, Google, and SMS OTP).
 - **Maps & Spatial:** Mapbox GL (mobile & web vector tiles) + Uber `h3-js` (resolution-7 hex binning).
 - **Rate Limiting & Nonces:** Upstash Redis (sliding-window rate limits + 60-second attestation challenges).
 - **Hosting:** Vercel (Next.js web preview) + EAS Build (Expo iOS/Android).

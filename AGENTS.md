@@ -64,14 +64,14 @@ Never violate these. Flag any request that would.
 5. Web heatmaps must use `web_h3_density_view` (H3 res-7, **≥ 2 households per cell**). Never render individual pins or cells with fewer than 2 households on web.
 6. Every write mutation (`create_household`, `join_household`, `send_connection_request`) goes through an Edge Function that verifies device attestation (Apple App Attest / Google Play Integrity) and a single-use 60-second nonce.
 7. Spatial query clamps stay in place: current radius ≤ 40,233 m (25 mi), hometown radius ≤ 80,467 m (50 mi), `LIMIT 100`.
-8. Every new table enables **RLS in the same migration** that creates it. Use `REVOKE SELECT (col)` for sensitive columns.
+8. Every new table enables **RLS in the same migration** that creates it. Supabase grants `ALL` on new `public` tables to `anon`/`authenticated`, and a column-level `REVOKE SELECT (col)` has **no effect** while a table-level grant exists. For tables with sensitive columns, `REVOKE ALL` at table level, then `GRANT SELECT (<explicit safe columns>)`. New columns stay private until deliberately added to the grant list. Clients must list columns explicitly (`select=*` fails).
 9. Reject icebreakers containing URLs (`http://`, `https://`, `wa.me`, `t.me`) or phone numbers.
 
 ## 5. Database rules
 
 - Change the schema only through new files in `supabase/migrations/` (`pnpm supabase migration new <name>`). **Never edit a migration that has been applied or committed.** Add a new one.
 - Keep Postgres enums in sync with `packages/shared/src/enums.ts`. Change both in the same PR.
-- `SECURITY DEFINER` functions must set `search_path` explicitly and must not leak revoked columns.
+- `SECURITY DEFINER` functions must set `search_path` explicitly (prefer `''` with qualified names), must not leak revoked columns, and must `REVOKE EXECUTE ... FROM public, anon` then grant only to the roles that need it.
 - Never put secrets or real user data in migrations or seed files.
 
 ## 6. Coding conventions
