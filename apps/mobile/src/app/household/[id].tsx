@@ -1,6 +1,7 @@
 import { parseHouseholdIdParam } from "@second-home/shared";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { getMockHouseholdById } from "@/data/mockHouseholds";
 import { dismissOrReturnHome } from "@/lib/navigation";
 import { useAppFlow } from "@/state/AppFlowContext";
 
@@ -9,6 +10,7 @@ export default function HouseholdDrawerSheet() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const { state, isHydrated } = useAppFlow();
   const householdId = parseHouseholdIdParam(params.id);
+  const household = householdId ? getMockHouseholdById(householdId) : undefined;
 
   if (!isHydrated) {
     return null;
@@ -23,11 +25,22 @@ export default function HouseholdDrawerSheet() {
     <View style={styles.container}>
       <Text style={styles.eyebrow}>HOUSEHOLD DRAWER · FLOW C SHELL</Text>
       <Text style={styles.title}>
-        {householdId ? `Household ${householdId.slice(0, 8)}` : "Unknown Household"}
+        {household
+          ? household.displayLabel
+          : householdId
+            ? `Household ${householdId.slice(0, 8)}`
+            : "Unknown Household"}
       </Text>
+      {household ? (
+        <Text style={styles.meta}>
+          Near {household.neighborhoodName} · {household.members.length} linked member
+          {household.members.length !== 1 ? "s" : ""}
+          {household.isVerifiedLocal ? " · Verified Local" : ""}
+        </Text>
+      ) : null}
       <Text style={styles.body}>
-        This native formSheet leaves the map undimmed above at the half-height detent. Step 2.2
-        renders all linked members, trust badges, 1-tap icebreakers, and WhatsApp handoff here.
+        This native formSheet leaves the map undimmed above at the half-height detent. Flow C
+        renders full member profiles, trust badges, 1-tap icebreakers, and WhatsApp handoff here.
       </Text>
 
       <Pressable style={styles.secondaryButton} onPress={() => dismissOrReturnHome(router)}>
@@ -54,6 +67,11 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "700",
     color: "#0F172A",
+  },
+  meta: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#0F766E",
   },
   body: {
     fontSize: 14,
