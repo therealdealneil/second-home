@@ -46,7 +46,9 @@ export type AppFlowAction =
   | { type: "SET_PENDING_INVITE_CODE"; code: string }
   | { type: "CLEAR_PENDING_INVITE_CODE" }
   | { type: "CONFIRM_NEIGHBORHOOD"; neighborhood: ConfirmedNeighborhood }
+  | { type: "EDIT_NEIGHBORHOOD" }
   | { type: "SELECT_ORIGIN"; origin: GujaratLocation }
+  | { type: "EDIT_ORIGIN" }
   | { type: "SET_PENDING_INTENT"; intent: PendingAuthIntent }
   | { type: "COMPLETE_MOCK_AUTH" }
   | { type: "COMPLETE_PERSONALIZATION"; personalization?: PersonalizationDraft }
@@ -125,6 +127,9 @@ export function appFlowReducer(state: AppFlowState, action: AppFlowAction): AppF
     }
 
     case "CONFIRM_NEIGHBORHOOD": {
+      if (state.isAuthenticated) {
+        return state;
+      }
       // Never skip San Antonio GPS confirmation, even with ?origin_id deep link;
       // once confirmed, jump straight to blurred_preview if origin is already pre-filled.
       const nextPhase: AppFlowPhase = state.selectedOrigin ? "blurred_preview" : "select_hometown";
@@ -135,6 +140,16 @@ export function appFlowReducer(state: AppFlowState, action: AppFlowAction): AppF
       };
     }
 
+    case "EDIT_NEIGHBORHOOD": {
+      if (state.isAuthenticated) {
+        return state;
+      }
+      return {
+        ...state,
+        phase: "confirm_neighborhood",
+      };
+    }
+
     case "SELECT_ORIGIN": {
       const nextPhase: AppFlowPhase =
         state.phase === "select_hometown" ? "blurred_preview" : state.phase;
@@ -142,6 +157,16 @@ export function appFlowReducer(state: AppFlowState, action: AppFlowAction): AppF
         ...state,
         selectedOrigin: action.origin,
         phase: nextPhase,
+      };
+    }
+
+    case "EDIT_ORIGIN": {
+      if (state.phase !== "blurred_preview") {
+        return state;
+      }
+      return {
+        ...state,
+        phase: "select_hometown",
       };
     }
 
