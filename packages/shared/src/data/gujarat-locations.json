@@ -1,0 +1,2040 @@
+[
+  {
+    "id": "ahmedabad-district",
+    "name": "Ahmedabad",
+    "displayName": "Ahmedabad District, Gujarat",
+    "district": "Ahmedabad",
+    "type": "district",
+    "lat": 23.0225,
+    "lng": 72.5714,
+    "aliases": ["Amdavad"]
+  },
+  {
+    "id": "ahmedabad-city",
+    "name": "Ahmedabad",
+    "displayName": "Ahmedabad, Gujarat",
+    "district": "Ahmedabad",
+    "type": "city",
+    "lat": 23.0225,
+    "lng": 72.5714,
+    "aliases": ["Amdavad", "AMD"]
+  },
+  {
+    "id": "ahmedabad-navrangpura",
+    "name": "Navrangpura",
+    "displayName": "Navrangpura, Ahmedabad, Gujarat",
+    "district": "Ahmedabad",
+    "type": "neighborhood",
+    "lat": 23.0365,
+    "lng": 72.5611
+  },
+  {
+    "id": "ahmedabad-satellite",
+    "name": "Satellite",
+    "displayName": "Satellite, Ahmedabad, Gujarat",
+    "district": "Ahmedabad",
+    "type": "neighborhood",
+    "lat": 23.03,
+    "lng": 72.5178
+  },
+  {
+    "id": "ahmedabad-bopal",
+    "name": "Bopal",
+    "displayName": "Bopal, Ahmedabad, Gujarat",
+    "district": "Ahmedabad",
+    "type": "neighborhood",
+    "lat": 23.0338,
+    "lng": 72.4634
+  },
+  {
+    "id": "ahmedabad-south-bopal",
+    "name": "South Bopal",
+    "displayName": "South Bopal, Ahmedabad, Gujarat",
+    "district": "Ahmedabad",
+    "type": "neighborhood",
+    "lat": 23.0145,
+    "lng": 72.466,
+    "aliases": ["SoBo"]
+  },
+  {
+    "id": "ahmedabad-prahlad-nagar",
+    "name": "Prahlad Nagar",
+    "displayName": "Prahlad Nagar, Ahmedabad, Gujarat",
+    "district": "Ahmedabad",
+    "type": "neighborhood",
+    "lat": 23.012,
+    "lng": 72.5108
+  },
+  {
+    "id": "ahmedabad-bodakdev",
+    "name": "Bodakdev",
+    "displayName": "Bodakdev, Ahmedabad, Gujarat",
+    "district": "Ahmedabad",
+    "type": "neighborhood",
+    "lat": 23.0405,
+    "lng": 72.5076
+  },
+  {
+    "id": "ahmedabad-vastrapur",
+    "name": "Vastrapur",
+    "displayName": "Vastrapur, Ahmedabad, Gujarat",
+    "district": "Ahmedabad",
+    "type": "neighborhood",
+    "lat": 23.035,
+    "lng": 72.5293
+  },
+  {
+    "id": "ahmedabad-thaltej",
+    "name": "Thaltej",
+    "displayName": "Thaltej, Ahmedabad, Gujarat",
+    "district": "Ahmedabad",
+    "type": "neighborhood",
+    "lat": 23.0497,
+    "lng": 72.5117
+  },
+  {
+    "id": "ahmedabad-maninagar",
+    "name": "Maninagar",
+    "displayName": "Maninagar, Ahmedabad, Gujarat",
+    "district": "Ahmedabad",
+    "type": "neighborhood",
+    "lat": 22.9962,
+    "lng": 72.6031
+  },
+  {
+    "id": "ahmedabad-naranpura",
+    "name": "Naranpura",
+    "displayName": "Naranpura, Ahmedabad, Gujarat",
+    "district": "Ahmedabad",
+    "type": "neighborhood",
+    "lat": 23.0585,
+    "lng": 72.5559
+  },
+  {
+    "id": "ahmedabad-ghatlodia",
+    "name": "Ghatlodia",
+    "displayName": "Ghatlodia, Ahmedabad, Gujarat",
+    "district": "Ahmedabad",
+    "type": "neighborhood",
+    "lat": 23.0686,
+    "lng": 72.5435
+  },
+  {
+    "id": "ahmedabad-chandkheda",
+    "name": "Chandkheda",
+    "displayName": "Chandkheda, Ahmedabad, Gujarat",
+    "district": "Ahmedabad",
+    "type": "neighborhood",
+    "lat": 23.1116,
+    "lng": 72.5728
+  },
+  {
+    "id": "ahmedabad-gota",
+    "name": "Gota",
+    "displayName": "Gota, Ahmedabad, Gujarat",
+    "district": "Ahmedabad",
+    "type": "neighborhood",
+    "lat": 23.0977,
+    "lng": 72.5491
+  },
+  {
+    "id": "ahmedabad-science-city",
+    "name": "Science City",
+    "displayName": "Science City, Ahmedabad, Gujarat",
+    "district": "Ahmedabad",
+    "type": "neighborhood",
+    "lat": 23.0736,
+    "lng": 72.5145
+  },
+  {
+    "id": "ahmedabad-paldi",
+    "name": "Paldi",
+    "displayName": "Paldi, Ahmedabad, Gujarat",
+    "district": "Ahmedabad",
+    "type": "neighborhood",
+    "lat": 23.0135,
+    "lng": 72.5624
+  },
+  {
+    "id": "ahmedabad-ambawadi",
+    "name": "Ambawadi",
+    "displayName": "Ambawadi, Ahmedabad, Gujarat",
+    "district": "Ahmedabad",
+    "type": "neighborhood",
+    "lat": 23.0216,
+    "lng": 72.5458
+  },
+  {
+    "id": "ahmedabad-memnagar",
+    "name": "Memnagar",
+    "displayName": "Memnagar, Ahmedabad, Gujarat",
+    "district": "Ahmedabad",
+    "type": "neighborhood",
+    "lat": 23.048,
+    "lng": 72.5364
+  },
+  {
+    "id": "ahmedabad-nikol",
+    "name": "Nikol",
+    "displayName": "Nikol, Ahmedabad, Gujarat",
+    "district": "Ahmedabad",
+    "type": "neighborhood",
+    "lat": 23.0427,
+    "lng": 72.6656
+  },
+  {
+    "id": "ahmedabad-shahibaug",
+    "name": "Shahibaug",
+    "displayName": "Shahibaug, Ahmedabad, Gujarat",
+    "district": "Ahmedabad",
+    "type": "neighborhood",
+    "lat": 23.0525,
+    "lng": 72.592
+  },
+  {
+    "id": "ahmedabad-sabarmati",
+    "name": "Sabarmati",
+    "displayName": "Sabarmati, Ahmedabad, Gujarat",
+    "district": "Ahmedabad",
+    "type": "neighborhood",
+    "lat": 23.0815,
+    "lng": 72.5877
+  },
+  {
+    "id": "ahmedabad-sanand",
+    "name": "Sanand",
+    "displayName": "Sanand, Ahmedabad, Gujarat",
+    "district": "Ahmedabad",
+    "type": "taluka",
+    "lat": 22.9921,
+    "lng": 72.3812
+  },
+  {
+    "id": "ahmedabad-dholka",
+    "name": "Dholka",
+    "displayName": "Dholka, Ahmedabad, Gujarat",
+    "district": "Ahmedabad",
+    "type": "taluka",
+    "lat": 22.7241,
+    "lng": 72.4414
+  },
+  {
+    "id": "ahmedabad-viramgam",
+    "name": "Viramgam",
+    "displayName": "Viramgam, Ahmedabad, Gujarat",
+    "district": "Ahmedabad",
+    "type": "taluka",
+    "lat": 23.1243,
+    "lng": 72.0545
+  },
+  {
+    "id": "ahmedabad-bavla",
+    "name": "Bavla",
+    "displayName": "Bavla, Ahmedabad, Gujarat",
+    "district": "Ahmedabad",
+    "type": "taluka",
+    "lat": 22.8303,
+    "lng": 72.3627
+  },
+
+  {
+    "id": "amreli-district",
+    "name": "Amreli",
+    "displayName": "Amreli District, Gujarat",
+    "district": "Amreli",
+    "type": "district",
+    "lat": 21.6015,
+    "lng": 71.2204
+  },
+  {
+    "id": "amreli-city",
+    "name": "Amreli",
+    "displayName": "Amreli, Gujarat",
+    "district": "Amreli",
+    "type": "city",
+    "lat": 21.6015,
+    "lng": 71.2204
+  },
+  {
+    "id": "amreli-savarkundla",
+    "name": "Savarkundla",
+    "displayName": "Savarkundla, Amreli, Gujarat",
+    "district": "Amreli",
+    "type": "taluka",
+    "lat": 21.3396,
+    "lng": 71.309
+  },
+  {
+    "id": "amreli-rajula",
+    "name": "Rajula",
+    "displayName": "Rajula, Amreli, Gujarat",
+    "district": "Amreli",
+    "type": "taluka",
+    "lat": 21.0442,
+    "lng": 71.4383
+  },
+  {
+    "id": "amreli-bagasara",
+    "name": "Bagasara",
+    "displayName": "Bagasara, Amreli, Gujarat",
+    "district": "Amreli",
+    "type": "taluka",
+    "lat": 21.4883,
+    "lng": 70.9554
+  },
+
+  {
+    "id": "anand-district",
+    "name": "Anand",
+    "displayName": "Anand District, Gujarat",
+    "district": "Anand",
+    "type": "district",
+    "lat": 22.5645,
+    "lng": 72.9289,
+    "aliases": ["Charotar"]
+  },
+  {
+    "id": "anand-city",
+    "name": "Anand",
+    "displayName": "Anand, Gujarat",
+    "district": "Anand",
+    "type": "city",
+    "lat": 22.5645,
+    "lng": 72.9289,
+    "aliases": ["Charotar", "Milk City"]
+  },
+  {
+    "id": "anand-vallabh-vidyanagar",
+    "name": "Vallabh Vidyanagar",
+    "displayName": "Vallabh Vidyanagar, Anand, Gujarat",
+    "district": "Anand",
+    "type": "neighborhood",
+    "lat": 22.5525,
+    "lng": 72.9238,
+    "aliases": ["VVN", "Vidyanagar"]
+  },
+  {
+    "id": "anand-karamsad",
+    "name": "Karamsad",
+    "displayName": "Karamsad, Anand, Gujarat",
+    "district": "Anand",
+    "type": "neighborhood",
+    "lat": 22.5469,
+    "lng": 72.8981
+  },
+  {
+    "id": "anand-borsad",
+    "name": "Borsad",
+    "displayName": "Borsad, Anand, Gujarat",
+    "district": "Anand",
+    "type": "taluka",
+    "lat": 22.4086,
+    "lng": 72.8983,
+    "aliases": ["Charotar"]
+  },
+  {
+    "id": "anand-petlad",
+    "name": "Petlad",
+    "displayName": "Petlad, Anand, Gujarat",
+    "district": "Anand",
+    "type": "taluka",
+    "lat": 22.4735,
+    "lng": 72.8008,
+    "aliases": ["Charotar"]
+  },
+  {
+    "id": "anand-dharmaj",
+    "name": "Dharmaj",
+    "displayName": "Dharmaj, Anand, Gujarat",
+    "district": "Anand",
+    "type": "taluka",
+    "lat": 22.4264,
+    "lng": 72.7929,
+    "aliases": ["Charotar"]
+  },
+  {
+    "id": "anand-sojitra",
+    "name": "Sojitra",
+    "displayName": "Sojitra, Anand, Gujarat",
+    "district": "Anand",
+    "type": "taluka",
+    "lat": 22.543,
+    "lng": 72.7191
+  },
+  {
+    "id": "anand-umreth",
+    "name": "Umreth",
+    "displayName": "Umreth, Anand, Gujarat",
+    "district": "Anand",
+    "type": "taluka",
+    "lat": 22.6991,
+    "lng": 73.1165
+  },
+  {
+    "id": "anand-khambhat",
+    "name": "Khambhat",
+    "displayName": "Khambhat, Anand, Gujarat",
+    "district": "Anand",
+    "type": "taluka",
+    "lat": 22.3133,
+    "lng": 72.6194,
+    "aliases": ["Cambay"]
+  },
+
+  {
+    "id": "aravalli-district",
+    "name": "Aravalli",
+    "displayName": "Aravalli District, Gujarat",
+    "district": "Aravalli",
+    "type": "district",
+    "lat": 23.4623,
+    "lng": 73.2989
+  },
+  {
+    "id": "aravalli-modasa",
+    "name": "Modasa",
+    "displayName": "Modasa, Aravalli, Gujarat",
+    "district": "Aravalli",
+    "type": "city",
+    "lat": 23.4623,
+    "lng": 73.2989
+  },
+  {
+    "id": "aravalli-bayad",
+    "name": "Bayad",
+    "displayName": "Bayad, Aravalli, Gujarat",
+    "district": "Aravalli",
+    "type": "taluka",
+    "lat": 23.2216,
+    "lng": 73.218
+  },
+  {
+    "id": "aravalli-bhiloda",
+    "name": "Bhiloda",
+    "displayName": "Bhiloda, Aravalli, Gujarat",
+    "district": "Aravalli",
+    "type": "taluka",
+    "lat": 23.7604,
+    "lng": 73.2422
+  },
+
+  {
+    "id": "banaskantha-district",
+    "name": "Banaskantha",
+    "displayName": "Banaskantha District, Gujarat",
+    "district": "Banaskantha",
+    "type": "district",
+    "lat": 24.1724,
+    "lng": 72.4346
+  },
+  {
+    "id": "banaskantha-palanpur",
+    "name": "Palanpur",
+    "displayName": "Palanpur, Banaskantha, Gujarat",
+    "district": "Banaskantha",
+    "type": "city",
+    "lat": 24.1724,
+    "lng": 72.4346
+  },
+  {
+    "id": "banaskantha-deesa",
+    "name": "Deesa",
+    "displayName": "Deesa, Banaskantha, Gujarat",
+    "district": "Banaskantha",
+    "type": "taluka",
+    "lat": 24.2585,
+    "lng": 72.1907
+  },
+  {
+    "id": "banaskantha-dhanera",
+    "name": "Dhanera",
+    "displayName": "Dhanera, Banaskantha, Gujarat",
+    "district": "Banaskantha",
+    "type": "taluka",
+    "lat": 24.5142,
+    "lng": 72.0238
+  },
+  {
+    "id": "banaskantha-tharad",
+    "name": "Tharad",
+    "displayName": "Tharad, Banaskantha, Gujarat",
+    "district": "Banaskantha",
+    "type": "taluka",
+    "lat": 24.3956,
+    "lng": 71.6258
+  },
+
+  {
+    "id": "bharuch-district",
+    "name": "Bharuch",
+    "displayName": "Bharuch District, Gujarat",
+    "district": "Bharuch",
+    "type": "district",
+    "lat": 21.7051,
+    "lng": 72.9959,
+    "aliases": ["Broach"]
+  },
+  {
+    "id": "bharuch-city",
+    "name": "Bharuch",
+    "displayName": "Bharuch, Gujarat",
+    "district": "Bharuch",
+    "type": "city",
+    "lat": 21.7051,
+    "lng": 72.9959,
+    "aliases": ["Broach"]
+  },
+  {
+    "id": "bharuch-ankleshwar",
+    "name": "Ankleshwar",
+    "displayName": "Ankleshwar, Bharuch, Gujarat",
+    "district": "Bharuch",
+    "type": "city",
+    "lat": 21.6264,
+    "lng": 73.0152
+  },
+  {
+    "id": "bharuch-jambusar",
+    "name": "Jambusar",
+    "displayName": "Jambusar, Bharuch, Gujarat",
+    "district": "Bharuch",
+    "type": "taluka",
+    "lat": 22.0543,
+    "lng": 72.8012
+  },
+
+  {
+    "id": "bhavnagar-district",
+    "name": "Bhavnagar",
+    "displayName": "Bhavnagar District, Gujarat",
+    "district": "Bhavnagar",
+    "type": "district",
+    "lat": 21.7645,
+    "lng": 72.1519
+  },
+  {
+    "id": "bhavnagar-city",
+    "name": "Bhavnagar",
+    "displayName": "Bhavnagar, Gujarat",
+    "district": "Bhavnagar",
+    "type": "city",
+    "lat": 21.7645,
+    "lng": 72.1519
+  },
+  {
+    "id": "bhavnagar-waghawadi-road",
+    "name": "Waghawadi Road",
+    "displayName": "Waghawadi Road, Bhavnagar, Gujarat",
+    "district": "Bhavnagar",
+    "type": "neighborhood",
+    "lat": 21.758,
+    "lng": 72.1422
+  },
+  {
+    "id": "bhavnagar-kaliyabid",
+    "name": "Kaliyabid",
+    "displayName": "Kaliyabid, Bhavnagar, Gujarat",
+    "district": "Bhavnagar",
+    "type": "neighborhood",
+    "lat": 21.7418,
+    "lng": 72.1465
+  },
+  {
+    "id": "bhavnagar-mahuva",
+    "name": "Mahuva",
+    "displayName": "Mahuva, Bhavnagar, Gujarat",
+    "district": "Bhavnagar",
+    "type": "taluka",
+    "lat": 21.0922,
+    "lng": 71.7623
+  },
+  {
+    "id": "bhavnagar-palitana",
+    "name": "Palitana",
+    "displayName": "Palitana, Bhavnagar, Gujarat",
+    "district": "Bhavnagar",
+    "type": "taluka",
+    "lat": 21.5245,
+    "lng": 71.8278
+  },
+  {
+    "id": "bhavnagar-sihor",
+    "name": "Sihor",
+    "displayName": "Sihor, Bhavnagar, Gujarat",
+    "district": "Bhavnagar",
+    "type": "taluka",
+    "lat": 21.7161,
+    "lng": 71.9612
+  },
+
+  {
+    "id": "botad-district",
+    "name": "Botad",
+    "displayName": "Botad District, Gujarat",
+    "district": "Botad",
+    "type": "district",
+    "lat": 22.1704,
+    "lng": 71.6684
+  },
+  {
+    "id": "botad-city",
+    "name": "Botad",
+    "displayName": "Botad, Gujarat",
+    "district": "Botad",
+    "type": "city",
+    "lat": 22.1704,
+    "lng": 71.6684
+  },
+  {
+    "id": "botad-gadhada",
+    "name": "Gadhada",
+    "displayName": "Gadhada, Botad, Gujarat",
+    "district": "Botad",
+    "type": "taluka",
+    "lat": 21.9675,
+    "lng": 71.5766
+  },
+
+  {
+    "id": "chhota-udaipur-district",
+    "name": "Chhota Udaipur",
+    "displayName": "Chhota Udaipur District, Gujarat",
+    "district": "Chhota Udaipur",
+    "type": "district",
+    "lat": 22.3042,
+    "lng": 74.0131
+  },
+  {
+    "id": "chhota-udaipur-city",
+    "name": "Chhota Udaipur",
+    "displayName": "Chhota Udaipur, Gujarat",
+    "district": "Chhota Udaipur",
+    "type": "city",
+    "lat": 22.3042,
+    "lng": 74.0131
+  },
+  {
+    "id": "chhota-udaipur-bodeli",
+    "name": "Bodeli",
+    "displayName": "Bodeli, Chhota Udaipur, Gujarat",
+    "district": "Chhota Udaipur",
+    "type": "taluka",
+    "lat": 22.2704,
+    "lng": 73.7138
+  },
+  {
+    "id": "chhota-udaipur-sankheda",
+    "name": "Sankheda",
+    "displayName": "Sankheda, Chhota Udaipur, Gujarat",
+    "district": "Chhota Udaipur",
+    "type": "taluka",
+    "lat": 22.1642,
+    "lng": 73.5765
+  },
+
+  {
+    "id": "dahod-district",
+    "name": "Dahod",
+    "displayName": "Dahod District, Gujarat",
+    "district": "Dahod",
+    "type": "district",
+    "lat": 22.8359,
+    "lng": 74.2597,
+    "aliases": ["Dohad"]
+  },
+  {
+    "id": "dahod-city",
+    "name": "Dahod",
+    "displayName": "Dahod, Gujarat",
+    "district": "Dahod",
+    "type": "city",
+    "lat": 22.8359,
+    "lng": 74.2597,
+    "aliases": ["Dohad"]
+  },
+  {
+    "id": "dahod-jhalod",
+    "name": "Jhalod",
+    "displayName": "Jhalod, Dahod, Gujarat",
+    "district": "Dahod",
+    "type": "taluka",
+    "lat": 23.1038,
+    "lng": 74.1563
+  },
+  {
+    "id": "dahod-devgadh-baria",
+    "name": "Devgadh Baria",
+    "displayName": "Devgadh Baria, Dahod, Gujarat",
+    "district": "Dahod",
+    "type": "taluka",
+    "lat": 22.7073,
+    "lng": 73.9082
+  },
+
+  {
+    "id": "dang-district",
+    "name": "Dang",
+    "displayName": "Dang District, Gujarat",
+    "district": "Dang",
+    "type": "district",
+    "lat": 20.7556,
+    "lng": 73.6889,
+    "aliases": ["Dangs"]
+  },
+  {
+    "id": "dang-ahwa",
+    "name": "Ahwa",
+    "displayName": "Ahwa, Dang, Gujarat",
+    "district": "Dang",
+    "type": "city",
+    "lat": 20.7556,
+    "lng": 73.6889
+  },
+  {
+    "id": "dang-saputara",
+    "name": "Saputara",
+    "displayName": "Saputara, Dang, Gujarat",
+    "district": "Dang",
+    "type": "taluka",
+    "lat": 20.5796,
+    "lng": 73.7481
+  },
+
+  {
+    "id": "devbhumi-dwarka-district",
+    "name": "Devbhumi Dwarka",
+    "displayName": "Devbhumi Dwarka District, Gujarat",
+    "district": "Devbhumi Dwarka",
+    "type": "district",
+    "lat": 22.2055,
+    "lng": 69.6524
+  },
+  {
+    "id": "devbhumi-dwarka-khambhalia",
+    "name": "Khambhalia",
+    "displayName": "Khambhalia, Devbhumi Dwarka, Gujarat",
+    "district": "Devbhumi Dwarka",
+    "type": "city",
+    "lat": 22.2055,
+    "lng": 69.6524
+  },
+  {
+    "id": "devbhumi-dwarka-dwarka",
+    "name": "Dwarka",
+    "displayName": "Dwarka, Devbhumi Dwarka, Gujarat",
+    "district": "Devbhumi Dwarka",
+    "type": "city",
+    "lat": 22.2442,
+    "lng": 68.9685
+  },
+
+  {
+    "id": "gandhinagar-district",
+    "name": "Gandhinagar",
+    "displayName": "Gandhinagar District, Gujarat",
+    "district": "Gandhinagar",
+    "type": "district",
+    "lat": 23.2156,
+    "lng": 72.6369
+  },
+  {
+    "id": "gandhinagar-city",
+    "name": "Gandhinagar",
+    "displayName": "Gandhinagar, Gujarat",
+    "district": "Gandhinagar",
+    "type": "city",
+    "lat": 23.2156,
+    "lng": 72.6369
+  },
+  {
+    "id": "gandhinagar-kudasan",
+    "name": "Kudasan",
+    "displayName": "Kudasan, Gandhinagar, Gujarat",
+    "district": "Gandhinagar",
+    "type": "neighborhood",
+    "lat": 23.182,
+    "lng": 72.638
+  },
+  {
+    "id": "gandhinagar-sargasan",
+    "name": "Sargasan",
+    "displayName": "Sargasan, Gandhinagar, Gujarat",
+    "district": "Gandhinagar",
+    "type": "neighborhood",
+    "lat": 23.1924,
+    "lng": 72.6164
+  },
+  {
+    "id": "gandhinagar-infocity",
+    "name": "Infocity",
+    "displayName": "Infocity, Gandhinagar, Gujarat",
+    "district": "Gandhinagar",
+    "type": "neighborhood",
+    "lat": 23.1945,
+    "lng": 72.6331
+  },
+  {
+    "id": "gandhinagar-gift-city",
+    "name": "GIFT City",
+    "displayName": "GIFT City, Gandhinagar, Gujarat",
+    "district": "Gandhinagar",
+    "type": "neighborhood",
+    "lat": 23.162,
+    "lng": 72.6836
+  },
+  {
+    "id": "gandhinagar-kalol",
+    "name": "Kalol",
+    "displayName": "Kalol, Gandhinagar, Gujarat",
+    "district": "Gandhinagar",
+    "type": "taluka",
+    "lat": 23.2469,
+    "lng": 72.4959
+  },
+  {
+    "id": "gandhinagar-mansa",
+    "name": "Mansa",
+    "displayName": "Mansa, Gandhinagar, Gujarat",
+    "district": "Gandhinagar",
+    "type": "taluka",
+    "lat": 23.4285,
+    "lng": 72.6584
+  },
+  {
+    "id": "gandhinagar-dehgam",
+    "name": "Dehgam",
+    "displayName": "Dehgam, Gandhinagar, Gujarat",
+    "district": "Gandhinagar",
+    "type": "taluka",
+    "lat": 23.1665,
+    "lng": 72.8152
+  },
+
+  {
+    "id": "gir-somnath-district",
+    "name": "Gir Somnath",
+    "displayName": "Gir Somnath District, Gujarat",
+    "district": "Gir Somnath",
+    "type": "district",
+    "lat": 20.9077,
+    "lng": 70.3679
+  },
+  {
+    "id": "gir-somnath-veraval",
+    "name": "Veraval",
+    "displayName": "Veraval, Gir Somnath, Gujarat",
+    "district": "Gir Somnath",
+    "type": "city",
+    "lat": 20.9077,
+    "lng": 70.3679,
+    "aliases": ["Somnath"]
+  },
+  {
+    "id": "gir-somnath-kodinar",
+    "name": "Kodinar",
+    "displayName": "Kodinar, Gir Somnath, Gujarat",
+    "district": "Gir Somnath",
+    "type": "taluka",
+    "lat": 20.7931,
+    "lng": 70.7037
+  },
+  {
+    "id": "gir-somnath-una",
+    "name": "Una",
+    "displayName": "Una, Gir Somnath, Gujarat",
+    "district": "Gir Somnath",
+    "type": "taluka",
+    "lat": 20.8229,
+    "lng": 71.041
+  },
+
+  {
+    "id": "jamnagar-district",
+    "name": "Jamnagar",
+    "displayName": "Jamnagar District, Gujarat",
+    "district": "Jamnagar",
+    "type": "district",
+    "lat": 22.4707,
+    "lng": 70.0577
+  },
+  {
+    "id": "jamnagar-city",
+    "name": "Jamnagar",
+    "displayName": "Jamnagar, Gujarat",
+    "district": "Jamnagar",
+    "type": "city",
+    "lat": 22.4707,
+    "lng": 70.0577
+  },
+  {
+    "id": "jamnagar-patel-colony",
+    "name": "Patel Colony",
+    "displayName": "Patel Colony, Jamnagar, Gujarat",
+    "district": "Jamnagar",
+    "type": "neighborhood",
+    "lat": 22.4796,
+    "lng": 70.0558
+  },
+  {
+    "id": "jamnagar-park-colony",
+    "name": "Park Colony",
+    "displayName": "Park Colony, Jamnagar, Gujarat",
+    "district": "Jamnagar",
+    "type": "neighborhood",
+    "lat": 22.4731,
+    "lng": 70.0493
+  },
+  {
+    "id": "jamnagar-dhrol",
+    "name": "Dhrol",
+    "displayName": "Dhrol, Jamnagar, Gujarat",
+    "district": "Jamnagar",
+    "type": "taluka",
+    "lat": 22.5673,
+    "lng": 70.4227
+  },
+
+  {
+    "id": "junagadh-district",
+    "name": "Junagadh",
+    "displayName": "Junagadh District, Gujarat",
+    "district": "Junagadh",
+    "type": "district",
+    "lat": 21.5222,
+    "lng": 70.4579
+  },
+  {
+    "id": "junagadh-city",
+    "name": "Junagadh",
+    "displayName": "Junagadh, Gujarat",
+    "district": "Junagadh",
+    "type": "city",
+    "lat": 21.5222,
+    "lng": 70.4579
+  },
+  {
+    "id": "junagadh-keshod",
+    "name": "Keshod",
+    "displayName": "Keshod, Junagadh, Gujarat",
+    "district": "Junagadh",
+    "type": "taluka",
+    "lat": 21.3005,
+    "lng": 70.249
+  },
+  {
+    "id": "junagadh-mangrol",
+    "name": "Mangrol",
+    "displayName": "Mangrol, Junagadh, Gujarat",
+    "district": "Junagadh",
+    "type": "taluka",
+    "lat": 21.1225,
+    "lng": 70.1149
+  },
+
+  {
+    "id": "kheda-district",
+    "name": "Kheda",
+    "displayName": "Kheda District, Gujarat",
+    "district": "Kheda",
+    "type": "district",
+    "lat": 22.7506,
+    "lng": 72.6853,
+    "aliases": ["Kaira", "Charotar"]
+  },
+  {
+    "id": "kheda-nadiad",
+    "name": "Nadiad",
+    "displayName": "Nadiad, Kheda, Gujarat",
+    "district": "Kheda",
+    "type": "city",
+    "lat": 22.6916,
+    "lng": 72.8634,
+    "aliases": ["Charotar"]
+  },
+  {
+    "id": "kheda-town",
+    "name": "Kheda",
+    "displayName": "Kheda, Gujarat",
+    "district": "Kheda",
+    "type": "taluka",
+    "lat": 22.7506,
+    "lng": 72.6853
+  },
+  {
+    "id": "kheda-kapadvanj",
+    "name": "Kapadvanj",
+    "displayName": "Kapadvanj, Kheda, Gujarat",
+    "district": "Kheda",
+    "type": "taluka",
+    "lat": 23.0238,
+    "lng": 73.0715
+  },
+  {
+    "id": "kheda-dakor",
+    "name": "Dakor",
+    "displayName": "Dakor, Kheda, Gujarat",
+    "district": "Kheda",
+    "type": "taluka",
+    "lat": 22.7524,
+    "lng": 73.1494
+  },
+  {
+    "id": "kheda-mehmedabad",
+    "name": "Mehmedabad",
+    "displayName": "Mehmedabad, Kheda, Gujarat",
+    "district": "Kheda",
+    "type": "taluka",
+    "lat": 22.8256,
+    "lng": 72.7615
+  },
+
+  {
+    "id": "kutch-district",
+    "name": "Kutch",
+    "displayName": "Kutch District, Gujarat",
+    "district": "Kutch",
+    "type": "district",
+    "lat": 23.242,
+    "lng": 69.6669,
+    "aliases": ["Kachchh"]
+  },
+  {
+    "id": "kutch-bhuj",
+    "name": "Bhuj",
+    "displayName": "Bhuj, Kutch, Gujarat",
+    "district": "Kutch",
+    "type": "city",
+    "lat": 23.242,
+    "lng": 69.6669,
+    "aliases": ["Kachchh"]
+  },
+  {
+    "id": "kutch-gandhidham",
+    "name": "Gandhidham",
+    "displayName": "Gandhidham, Kutch, Gujarat",
+    "district": "Kutch",
+    "type": "city",
+    "lat": 23.0753,
+    "lng": 70.1337
+  },
+  {
+    "id": "kutch-adipur",
+    "name": "Adipur",
+    "displayName": "Adipur, Kutch, Gujarat",
+    "district": "Kutch",
+    "type": "neighborhood",
+    "lat": 23.0736,
+    "lng": 70.0772
+  },
+  {
+    "id": "kutch-anjar",
+    "name": "Anjar",
+    "displayName": "Anjar, Kutch, Gujarat",
+    "district": "Kutch",
+    "type": "taluka",
+    "lat": 23.1116,
+    "lng": 70.0285
+  },
+  {
+    "id": "kutch-mandvi",
+    "name": "Mandvi",
+    "displayName": "Mandvi, Kutch, Gujarat",
+    "district": "Kutch",
+    "type": "taluka",
+    "lat": 22.8328,
+    "lng": 69.3524
+  },
+  {
+    "id": "kutch-mundra",
+    "name": "Mundra",
+    "displayName": "Mundra, Kutch, Gujarat",
+    "district": "Kutch",
+    "type": "taluka",
+    "lat": 22.8396,
+    "lng": 69.7213
+  },
+  {
+    "id": "kutch-bhachau",
+    "name": "Bhachau",
+    "displayName": "Bhachau, Kutch, Gujarat",
+    "district": "Kutch",
+    "type": "taluka",
+    "lat": 23.2906,
+    "lng": 70.3413
+  },
+
+  {
+    "id": "mahisagar-district",
+    "name": "Mahisagar",
+    "displayName": "Mahisagar District, Gujarat",
+    "district": "Mahisagar",
+    "type": "district",
+    "lat": 23.1333,
+    "lng": 73.6167
+  },
+  {
+    "id": "mahisagar-lunawada",
+    "name": "Lunawada",
+    "displayName": "Lunawada, Mahisagar, Gujarat",
+    "district": "Mahisagar",
+    "type": "city",
+    "lat": 23.1333,
+    "lng": 73.6167
+  },
+  {
+    "id": "mahisagar-balasinor",
+    "name": "Balasinor",
+    "displayName": "Balasinor, Mahisagar, Gujarat",
+    "district": "Mahisagar",
+    "type": "taluka",
+    "lat": 22.9571,
+    "lng": 73.3324
+  },
+  {
+    "id": "mahisagar-santrampur",
+    "name": "Santrampur",
+    "displayName": "Santrampur, Mahisagar, Gujarat",
+    "district": "Mahisagar",
+    "type": "taluka",
+    "lat": 23.195,
+    "lng": 73.8965
+  },
+
+  {
+    "id": "mehsana-district",
+    "name": "Mehsana",
+    "displayName": "Mehsana District, Gujarat",
+    "district": "Mehsana",
+    "type": "district",
+    "lat": 23.588,
+    "lng": 72.3693,
+    "aliases": ["Mahesana"]
+  },
+  {
+    "id": "mehsana-city",
+    "name": "Mehsana",
+    "displayName": "Mehsana, Gujarat",
+    "district": "Mehsana",
+    "type": "city",
+    "lat": 23.588,
+    "lng": 72.3693,
+    "aliases": ["Mahesana"]
+  },
+  {
+    "id": "mehsana-visnagar",
+    "name": "Visnagar",
+    "displayName": "Visnagar, Mehsana, Gujarat",
+    "district": "Mehsana",
+    "type": "taluka",
+    "lat": 23.6986,
+    "lng": 72.5515
+  },
+  {
+    "id": "mehsana-unjha",
+    "name": "Unjha",
+    "displayName": "Unjha, Mehsana, Gujarat",
+    "district": "Mehsana",
+    "type": "taluka",
+    "lat": 23.8037,
+    "lng": 72.3911
+  },
+  {
+    "id": "mehsana-kadi",
+    "name": "Kadi",
+    "displayName": "Kadi, Mehsana, Gujarat",
+    "district": "Mehsana",
+    "type": "taluka",
+    "lat": 23.2973,
+    "lng": 72.3336
+  },
+  {
+    "id": "mehsana-vijapur",
+    "name": "Vijapur",
+    "displayName": "Vijapur, Mehsana, Gujarat",
+    "district": "Mehsana",
+    "type": "taluka",
+    "lat": 23.5625,
+    "lng": 72.7524
+  },
+  {
+    "id": "mehsana-vadnagar",
+    "name": "Vadnagar",
+    "displayName": "Vadnagar, Mehsana, Gujarat",
+    "district": "Mehsana",
+    "type": "taluka",
+    "lat": 23.7826,
+    "lng": 72.6373
+  },
+
+  {
+    "id": "morbi-district",
+    "name": "Morbi",
+    "displayName": "Morbi District, Gujarat",
+    "district": "Morbi",
+    "type": "district",
+    "lat": 22.8173,
+    "lng": 70.8377,
+    "aliases": ["Morvi"]
+  },
+  {
+    "id": "morbi-city",
+    "name": "Morbi",
+    "displayName": "Morbi, Gujarat",
+    "district": "Morbi",
+    "type": "city",
+    "lat": 22.8173,
+    "lng": 70.8377,
+    "aliases": ["Morvi"]
+  },
+  {
+    "id": "morbi-wankaner",
+    "name": "Wankaner",
+    "displayName": "Wankaner, Morbi, Gujarat",
+    "district": "Morbi",
+    "type": "taluka",
+    "lat": 22.6167,
+    "lng": 70.95
+  },
+  {
+    "id": "morbi-halvad",
+    "name": "Halvad",
+    "displayName": "Halvad, Morbi, Gujarat",
+    "district": "Morbi",
+    "type": "taluka",
+    "lat": 23.0167,
+    "lng": 71.1833
+  },
+
+  {
+    "id": "narmada-district",
+    "name": "Narmada",
+    "displayName": "Narmada District, Gujarat",
+    "district": "Narmada",
+    "type": "district",
+    "lat": 21.8698,
+    "lng": 73.503
+  },
+  {
+    "id": "narmada-rajpipla",
+    "name": "Rajpipla",
+    "displayName": "Rajpipla, Narmada, Gujarat",
+    "district": "Narmada",
+    "type": "city",
+    "lat": 21.8698,
+    "lng": 73.503
+  },
+  {
+    "id": "narmada-kevadia",
+    "name": "Kevadia",
+    "displayName": "Kevadia, Narmada, Gujarat",
+    "district": "Narmada",
+    "type": "taluka",
+    "lat": 21.8824,
+    "lng": 73.7042,
+    "aliases": ["Ekta Nagar"]
+  },
+
+  {
+    "id": "navsari-district",
+    "name": "Navsari",
+    "displayName": "Navsari District, Gujarat",
+    "district": "Navsari",
+    "type": "district",
+    "lat": 20.9467,
+    "lng": 72.952
+  },
+  {
+    "id": "navsari-city",
+    "name": "Navsari",
+    "displayName": "Navsari, Gujarat",
+    "district": "Navsari",
+    "type": "city",
+    "lat": 20.9467,
+    "lng": 72.952
+  },
+  {
+    "id": "navsari-bilimora",
+    "name": "Bilimora",
+    "displayName": "Bilimora, Navsari, Gujarat",
+    "district": "Navsari",
+    "type": "city",
+    "lat": 20.7697,
+    "lng": 72.9614
+  },
+  {
+    "id": "navsari-chikhli",
+    "name": "Chikhli",
+    "displayName": "Chikhli, Navsari, Gujarat",
+    "district": "Navsari",
+    "type": "taluka",
+    "lat": 20.7574,
+    "lng": 73.0631
+  },
+  {
+    "id": "navsari-gandevi",
+    "name": "Gandevi",
+    "displayName": "Gandevi, Navsari, Gujarat",
+    "district": "Navsari",
+    "type": "taluka",
+    "lat": 20.8141,
+    "lng": 72.9904
+  },
+
+  {
+    "id": "panchmahal-district",
+    "name": "Panchmahal",
+    "displayName": "Panchmahal District, Gujarat",
+    "district": "Panchmahal",
+    "type": "district",
+    "lat": 22.7788,
+    "lng": 73.6143
+  },
+  {
+    "id": "panchmahal-godhra",
+    "name": "Godhra",
+    "displayName": "Godhra, Panchmahal, Gujarat",
+    "district": "Panchmahal",
+    "type": "city",
+    "lat": 22.7788,
+    "lng": 73.6143
+  },
+  {
+    "id": "panchmahal-halol",
+    "name": "Halol",
+    "displayName": "Halol, Panchmahal, Gujarat",
+    "district": "Panchmahal",
+    "type": "taluka",
+    "lat": 22.5023,
+    "lng": 73.4716
+  },
+  {
+    "id": "panchmahal-kalol",
+    "name": "Kalol (Panchmahal)",
+    "displayName": "Kalol, Panchmahal, Gujarat",
+    "district": "Panchmahal",
+    "type": "taluka",
+    "lat": 22.6061,
+    "lng": 73.4616
+  },
+
+  {
+    "id": "patan-district",
+    "name": "Patan",
+    "displayName": "Patan District, Gujarat",
+    "district": "Patan",
+    "type": "district",
+    "lat": 23.8493,
+    "lng": 72.1266
+  },
+  {
+    "id": "patan-city",
+    "name": "Patan",
+    "displayName": "Patan, Gujarat",
+    "district": "Patan",
+    "type": "city",
+    "lat": 23.8493,
+    "lng": 72.1266
+  },
+  {
+    "id": "patan-siddhpur",
+    "name": "Siddhpur",
+    "displayName": "Siddhpur, Patan, Gujarat",
+    "district": "Patan",
+    "type": "taluka",
+    "lat": 23.9182,
+    "lng": 72.3712,
+    "aliases": ["Sidhpur"]
+  },
+  {
+    "id": "patan-chanasma",
+    "name": "Chanasma",
+    "displayName": "Chanasma, Patan, Gujarat",
+    "district": "Patan",
+    "type": "taluka",
+    "lat": 23.7204,
+    "lng": 72.1194
+  },
+  {
+    "id": "patan-radhanpur",
+    "name": "Radhanpur",
+    "displayName": "Radhanpur, Patan, Gujarat",
+    "district": "Patan",
+    "type": "taluka",
+    "lat": 23.8318,
+    "lng": 71.6042
+  },
+
+  {
+    "id": "porbandar-district",
+    "name": "Porbandar",
+    "displayName": "Porbandar District, Gujarat",
+    "district": "Porbandar",
+    "type": "district",
+    "lat": 21.6417,
+    "lng": 69.6293
+  },
+  {
+    "id": "porbandar-city",
+    "name": "Porbandar",
+    "displayName": "Porbandar, Gujarat",
+    "district": "Porbandar",
+    "type": "city",
+    "lat": 21.6417,
+    "lng": 69.6293
+  },
+  {
+    "id": "porbandar-ranavav",
+    "name": "Ranavav",
+    "displayName": "Ranavav, Porbandar, Gujarat",
+    "district": "Porbandar",
+    "type": "taluka",
+    "lat": 21.6787,
+    "lng": 69.7549
+  },
+
+  {
+    "id": "rajkot-district",
+    "name": "Rajkot",
+    "displayName": "Rajkot District, Gujarat",
+    "district": "Rajkot",
+    "type": "district",
+    "lat": 22.3039,
+    "lng": 70.8022
+  },
+  {
+    "id": "rajkot-city",
+    "name": "Rajkot",
+    "displayName": "Rajkot, Gujarat",
+    "district": "Rajkot",
+    "type": "city",
+    "lat": 22.3039,
+    "lng": 70.8022
+  },
+  {
+    "id": "rajkot-kalawad-road",
+    "name": "Kalawad Road",
+    "displayName": "Kalawad Road, Rajkot, Gujarat",
+    "district": "Rajkot",
+    "type": "neighborhood",
+    "lat": 22.283,
+    "lng": 70.772
+  },
+  {
+    "id": "rajkot-university-road",
+    "name": "University Road",
+    "displayName": "University Road, Rajkot, Gujarat",
+    "district": "Rajkot",
+    "type": "neighborhood",
+    "lat": 22.2923,
+    "lng": 70.7644
+  },
+  {
+    "id": "rajkot-150-feet-ring-road",
+    "name": "150 Feet Ring Road",
+    "displayName": "150 Feet Ring Road, Rajkot, Gujarat",
+    "district": "Rajkot",
+    "type": "neighborhood",
+    "lat": 22.2856,
+    "lng": 70.7815
+  },
+  {
+    "id": "rajkot-race-course",
+    "name": "Race Course",
+    "displayName": "Race Course, Rajkot, Gujarat",
+    "district": "Rajkot",
+    "type": "neighborhood",
+    "lat": 22.3005,
+    "lng": 70.7893
+  },
+  {
+    "id": "rajkot-amin-marg",
+    "name": "Amin Marg",
+    "displayName": "Amin Marg, Rajkot, Gujarat",
+    "district": "Rajkot",
+    "type": "neighborhood",
+    "lat": 22.2882,
+    "lng": 70.785
+  },
+  {
+    "id": "rajkot-mavdi",
+    "name": "Mavdi",
+    "displayName": "Mavdi, Rajkot, Gujarat",
+    "district": "Rajkot",
+    "type": "neighborhood",
+    "lat": 22.2564,
+    "lng": 70.7832
+  },
+  {
+    "id": "rajkot-raiya-road",
+    "name": "Raiya Road",
+    "displayName": "Raiya Road, Rajkot, Gujarat",
+    "district": "Rajkot",
+    "type": "neighborhood",
+    "lat": 22.3078,
+    "lng": 70.7686
+  },
+  {
+    "id": "rajkot-gondal",
+    "name": "Gondal",
+    "displayName": "Gondal, Rajkot, Gujarat",
+    "district": "Rajkot",
+    "type": "taluka",
+    "lat": 21.9619,
+    "lng": 70.7923
+  },
+  {
+    "id": "rajkot-jetpur",
+    "name": "Jetpur",
+    "displayName": "Jetpur, Rajkot, Gujarat",
+    "district": "Rajkot",
+    "type": "taluka",
+    "lat": 21.754,
+    "lng": 70.6231
+  },
+  {
+    "id": "rajkot-dhoraji",
+    "name": "Dhoraji",
+    "displayName": "Dhoraji, Rajkot, Gujarat",
+    "district": "Rajkot",
+    "type": "taluka",
+    "lat": 21.7372,
+    "lng": 70.4494
+  },
+  {
+    "id": "rajkot-upleta",
+    "name": "Upleta",
+    "displayName": "Upleta, Rajkot, Gujarat",
+    "district": "Rajkot",
+    "type": "taluka",
+    "lat": 21.7393,
+    "lng": 70.2817
+  },
+
+  {
+    "id": "sabarkantha-district",
+    "name": "Sabarkantha",
+    "displayName": "Sabarkantha District, Gujarat",
+    "district": "Sabarkantha",
+    "type": "district",
+    "lat": 23.5969,
+    "lng": 72.963
+  },
+  {
+    "id": "sabarkantha-himatnagar",
+    "name": "Himatnagar",
+    "displayName": "Himatnagar, Sabarkantha, Gujarat",
+    "district": "Sabarkantha",
+    "type": "city",
+    "lat": 23.5969,
+    "lng": 72.963,
+    "aliases": ["Himmatnagar"]
+  },
+  {
+    "id": "sabarkantha-idar",
+    "name": "Idar",
+    "displayName": "Idar, Sabarkantha, Gujarat",
+    "district": "Sabarkantha",
+    "type": "taluka",
+    "lat": 23.8351,
+    "lng": 73.0019
+  },
+  {
+    "id": "sabarkantha-prantij",
+    "name": "Prantij",
+    "displayName": "Prantij, Sabarkantha, Gujarat",
+    "district": "Sabarkantha",
+    "type": "taluka",
+    "lat": 23.4375,
+    "lng": 72.8562
+  },
+
+  {
+    "id": "surat-district",
+    "name": "Surat",
+    "displayName": "Surat District, Gujarat",
+    "district": "Surat",
+    "type": "district",
+    "lat": 21.1702,
+    "lng": 72.8311
+  },
+  {
+    "id": "surat-city",
+    "name": "Surat",
+    "displayName": "Surat, Gujarat",
+    "district": "Surat",
+    "type": "city",
+    "lat": 21.1702,
+    "lng": 72.8311,
+    "aliases": ["Diamond City"]
+  },
+  {
+    "id": "surat-vesu",
+    "name": "Vesu",
+    "displayName": "Vesu, Surat, Gujarat",
+    "district": "Surat",
+    "type": "neighborhood",
+    "lat": 21.1418,
+    "lng": 72.7709
+  },
+  {
+    "id": "surat-adajan",
+    "name": "Adajan",
+    "displayName": "Adajan, Surat, Gujarat",
+    "district": "Surat",
+    "type": "neighborhood",
+    "lat": 21.1959,
+    "lng": 72.7933
+  },
+  {
+    "id": "surat-piplod",
+    "name": "Piplod",
+    "displayName": "Piplod, Surat, Gujarat",
+    "district": "Surat",
+    "type": "neighborhood",
+    "lat": 21.1591,
+    "lng": 72.7758
+  },
+  {
+    "id": "surat-athwa",
+    "name": "Athwa",
+    "displayName": "Athwa, Surat, Gujarat",
+    "district": "Surat",
+    "type": "neighborhood",
+    "lat": 21.1806,
+    "lng": 72.8058
+  },
+  {
+    "id": "surat-city-light",
+    "name": "City Light",
+    "displayName": "City Light, Surat, Gujarat",
+    "district": "Surat",
+    "type": "neighborhood",
+    "lat": 21.1695,
+    "lng": 72.7924
+  },
+  {
+    "id": "surat-pal",
+    "name": "Pal",
+    "displayName": "Pal, Surat, Gujarat",
+    "district": "Surat",
+    "type": "neighborhood",
+    "lat": 21.1904,
+    "lng": 72.776
+  },
+  {
+    "id": "surat-katargam",
+    "name": "Katargam",
+    "displayName": "Katargam, Surat, Gujarat",
+    "district": "Surat",
+    "type": "neighborhood",
+    "lat": 21.2266,
+    "lng": 72.8312
+  },
+  {
+    "id": "surat-varachha",
+    "name": "Varachha",
+    "displayName": "Varachha, Surat, Gujarat",
+    "district": "Surat",
+    "type": "neighborhood",
+    "lat": 21.213,
+    "lng": 72.8588
+  },
+  {
+    "id": "surat-althan",
+    "name": "Althan",
+    "displayName": "Althan, Surat, Gujarat",
+    "district": "Surat",
+    "type": "neighborhood",
+    "lat": 21.1506,
+    "lng": 72.8007
+  },
+  {
+    "id": "surat-parle-point",
+    "name": "Parle Point",
+    "displayName": "Parle Point, Surat, Gujarat",
+    "district": "Surat",
+    "type": "neighborhood",
+    "lat": 21.1726,
+    "lng": 72.7897
+  },
+  {
+    "id": "surat-ghod-dod-road",
+    "name": "Ghod Dod Road",
+    "displayName": "Ghod Dod Road, Surat, Gujarat",
+    "district": "Surat",
+    "type": "neighborhood",
+    "lat": 21.1753,
+    "lng": 72.8062
+  },
+  {
+    "id": "surat-dumas",
+    "name": "Dumas",
+    "displayName": "Dumas, Surat, Gujarat",
+    "district": "Surat",
+    "type": "neighborhood",
+    "lat": 21.0846,
+    "lng": 72.7124
+  },
+  {
+    "id": "surat-rander",
+    "name": "Rander",
+    "displayName": "Rander, Surat, Gujarat",
+    "district": "Surat",
+    "type": "neighborhood",
+    "lat": 21.2189,
+    "lng": 72.7945
+  },
+  {
+    "id": "surat-bardoli",
+    "name": "Bardoli",
+    "displayName": "Bardoli, Surat, Gujarat",
+    "district": "Surat",
+    "type": "taluka",
+    "lat": 21.1255,
+    "lng": 73.1122
+  },
+  {
+    "id": "surat-kamrej",
+    "name": "Kamrej",
+    "displayName": "Kamrej, Surat, Gujarat",
+    "district": "Surat",
+    "type": "taluka",
+    "lat": 21.2692,
+    "lng": 72.9598
+  },
+  {
+    "id": "surat-olpad",
+    "name": "Olpad",
+    "displayName": "Olpad, Surat, Gujarat",
+    "district": "Surat",
+    "type": "taluka",
+    "lat": 21.3375,
+    "lng": 72.7524
+  },
+
+  {
+    "id": "surendranagar-district",
+    "name": "Surendranagar",
+    "displayName": "Surendranagar District, Gujarat",
+    "district": "Surendranagar",
+    "type": "district",
+    "lat": 22.7281,
+    "lng": 71.637
+  },
+  {
+    "id": "surendranagar-city",
+    "name": "Surendranagar",
+    "displayName": "Surendranagar, Gujarat",
+    "district": "Surendranagar",
+    "type": "city",
+    "lat": 22.7281,
+    "lng": 71.637
+  },
+  {
+    "id": "surendranagar-wadhwan",
+    "name": "Wadhwan",
+    "displayName": "Wadhwan, Surendranagar, Gujarat",
+    "district": "Surendranagar",
+    "type": "taluka",
+    "lat": 22.7254,
+    "lng": 71.6822
+  },
+  {
+    "id": "surendranagar-dhrangadhra",
+    "name": "Dhrangadhra",
+    "displayName": "Dhrangadhra, Surendranagar, Gujarat",
+    "district": "Surendranagar",
+    "type": "taluka",
+    "lat": 22.9906,
+    "lng": 71.4666
+  },
+  {
+    "id": "surendranagar-limbdi",
+    "name": "Limbdi",
+    "displayName": "Limbdi, Surendranagar, Gujarat",
+    "district": "Surendranagar",
+    "type": "taluka",
+    "lat": 22.565,
+    "lng": 71.8108
+  },
+  {
+    "id": "surendranagar-chotila",
+    "name": "Chotila",
+    "displayName": "Chotila, Surendranagar, Gujarat",
+    "district": "Surendranagar",
+    "type": "taluka",
+    "lat": 22.4237,
+    "lng": 71.1967
+  },
+
+  {
+    "id": "tapi-district",
+    "name": "Tapi",
+    "displayName": "Tapi District, Gujarat",
+    "district": "Tapi",
+    "type": "district",
+    "lat": 21.1119,
+    "lng": 73.3947
+  },
+  {
+    "id": "tapi-vyara",
+    "name": "Vyara",
+    "displayName": "Vyara, Tapi, Gujarat",
+    "district": "Tapi",
+    "type": "city",
+    "lat": 21.1119,
+    "lng": 73.3947
+  },
+  {
+    "id": "tapi-songadh",
+    "name": "Songadh",
+    "displayName": "Songadh, Tapi, Gujarat",
+    "district": "Tapi",
+    "type": "taluka",
+    "lat": 21.1682,
+    "lng": 73.5622
+  },
+
+  {
+    "id": "vadodara-district",
+    "name": "Vadodara",
+    "displayName": "Vadodara District, Gujarat",
+    "district": "Vadodara",
+    "type": "district",
+    "lat": 22.3072,
+    "lng": 73.1812,
+    "aliases": ["Baroda"]
+  },
+  {
+    "id": "vadodara-city",
+    "name": "Vadodara",
+    "displayName": "Vadodara, Gujarat",
+    "district": "Vadodara",
+    "type": "city",
+    "lat": 22.3072,
+    "lng": 73.1812,
+    "aliases": ["Baroda", "BDQ"]
+  },
+  {
+    "id": "vadodara-alkapuri",
+    "name": "Alkapuri",
+    "displayName": "Alkapuri, Vadodara, Gujarat",
+    "district": "Vadodara",
+    "type": "neighborhood",
+    "lat": 22.3119,
+    "lng": 73.1723,
+    "aliases": ["Baroda"]
+  },
+  {
+    "id": "vadodara-akota",
+    "name": "Akota",
+    "displayName": "Akota, Vadodara, Gujarat",
+    "district": "Vadodara",
+    "type": "neighborhood",
+    "lat": 22.2956,
+    "lng": 73.168,
+    "aliases": ["Baroda"]
+  },
+  {
+    "id": "vadodara-gotri",
+    "name": "Gotri",
+    "displayName": "Gotri, Vadodara, Gujarat",
+    "district": "Vadodara",
+    "type": "neighborhood",
+    "lat": 22.315,
+    "lng": 73.1404
+  },
+  {
+    "id": "vadodara-manjalpur",
+    "name": "Manjalpur",
+    "displayName": "Manjalpur, Vadodara, Gujarat",
+    "district": "Vadodara",
+    "type": "neighborhood",
+    "lat": 22.272,
+    "lng": 73.192
+  },
+  {
+    "id": "vadodara-karelibaug",
+    "name": "Karelibaug",
+    "displayName": "Karelibaug, Vadodara, Gujarat",
+    "district": "Vadodara",
+    "type": "neighborhood",
+    "lat": 22.322,
+    "lng": 73.203
+  },
+  {
+    "id": "vadodara-fatehgunj",
+    "name": "Fatehgunj",
+    "displayName": "Fatehgunj, Vadodara, Gujarat",
+    "district": "Vadodara",
+    "type": "neighborhood",
+    "lat": 22.3239,
+    "lng": 73.1887
+  },
+  {
+    "id": "vadodara-sayajigunj",
+    "name": "Sayajigunj",
+    "displayName": "Sayajigunj, Vadodara, Gujarat",
+    "district": "Vadodara",
+    "type": "neighborhood",
+    "lat": 22.3106,
+    "lng": 73.1852
+  },
+  {
+    "id": "vadodara-vasna-bhayli",
+    "name": "Vasna-Bhayli",
+    "displayName": "Vasna-Bhayli, Vadodara, Gujarat",
+    "district": "Vadodara",
+    "type": "neighborhood",
+    "lat": 22.2977,
+    "lng": 73.1338,
+    "aliases": ["Bhayli"]
+  },
+  {
+    "id": "vadodara-waghodia-road",
+    "name": "Waghodia Road",
+    "displayName": "Waghodia Road, Vadodara, Gujarat",
+    "district": "Vadodara",
+    "type": "neighborhood",
+    "lat": 22.303,
+    "lng": 73.237
+  },
+  {
+    "id": "vadodara-sama",
+    "name": "Sama",
+    "displayName": "Sama, Vadodara, Gujarat",
+    "district": "Vadodara",
+    "type": "neighborhood",
+    "lat": 22.3408,
+    "lng": 73.2032
+  },
+  {
+    "id": "vadodara-nizampura",
+    "name": "Nizampura",
+    "displayName": "Nizampura, Vadodara, Gujarat",
+    "district": "Vadodara",
+    "type": "neighborhood",
+    "lat": 22.3372,
+    "lng": 73.182
+  },
+  {
+    "id": "vadodara-makarpura",
+    "name": "Makarpura",
+    "displayName": "Makarpura, Vadodara, Gujarat",
+    "district": "Vadodara",
+    "type": "neighborhood",
+    "lat": 22.2442,
+    "lng": 73.1947
+  },
+  {
+    "id": "vadodara-subhanpura",
+    "name": "Subhanpura",
+    "displayName": "Subhanpura, Vadodara, Gujarat",
+    "district": "Vadodara",
+    "type": "neighborhood",
+    "lat": 22.3237,
+    "lng": 73.1544
+  },
+  {
+    "id": "vadodara-harni",
+    "name": "Harni",
+    "displayName": "Harni, Vadodara, Gujarat",
+    "district": "Vadodara",
+    "type": "neighborhood",
+    "lat": 22.3364,
+    "lng": 73.2227
+  },
+  {
+    "id": "vadodara-padra",
+    "name": "Padra",
+    "displayName": "Padra, Vadodara, Gujarat",
+    "district": "Vadodara",
+    "type": "taluka",
+    "lat": 22.2389,
+    "lng": 73.0846
+  },
+  {
+    "id": "vadodara-karjan",
+    "name": "Karjan",
+    "displayName": "Karjan, Vadodara, Gujarat",
+    "district": "Vadodara",
+    "type": "taluka",
+    "lat": 22.0543,
+    "lng": 73.1235
+  },
+  {
+    "id": "vadodara-dabhoi",
+    "name": "Dabhoi",
+    "displayName": "Dabhoi, Vadodara, Gujarat",
+    "district": "Vadodara",
+    "type": "taluka",
+    "lat": 22.126,
+    "lng": 73.4126
+  },
+  {
+    "id": "vadodara-savli",
+    "name": "Savli",
+    "displayName": "Savli, Vadodara, Gujarat",
+    "district": "Vadodara",
+    "type": "taluka",
+    "lat": 22.5612,
+    "lng": 73.2225
+  },
+
+  {
+    "id": "valsad-district",
+    "name": "Valsad",
+    "displayName": "Valsad District, Gujarat",
+    "district": "Valsad",
+    "type": "district",
+    "lat": 20.5992,
+    "lng": 72.9342,
+    "aliases": ["Bulsar"]
+  },
+  {
+    "id": "valsad-city",
+    "name": "Valsad",
+    "displayName": "Valsad, Gujarat",
+    "district": "Valsad",
+    "type": "city",
+    "lat": 20.5992,
+    "lng": 72.9342,
+    "aliases": ["Bulsar"]
+  },
+  {
+    "id": "valsad-vapi",
+    "name": "Vapi",
+    "displayName": "Vapi, Valsad, Gujarat",
+    "district": "Valsad",
+    "type": "city",
+    "lat": 20.3893,
+    "lng": 72.9106
+  },
+  {
+    "id": "valsad-pardi",
+    "name": "Pardi",
+    "displayName": "Pardi, Valsad, Gujarat",
+    "district": "Valsad",
+    "type": "taluka",
+    "lat": 20.5142,
+    "lng": 72.9562
+  },
+  {
+    "id": "valsad-umbergaon",
+    "name": "Umbergaon",
+    "displayName": "Umbergaon, Valsad, Gujarat",
+    "district": "Valsad",
+    "type": "taluka",
+    "lat": 20.1945,
+    "lng": 72.7524
+  },
+  {
+    "id": "valsad-dharampur",
+    "name": "Dharampur",
+    "displayName": "Dharampur, Valsad, Gujarat",
+    "district": "Valsad",
+    "type": "taluka",
+    "lat": 20.5372,
+    "lng": 73.1753
+  }
+]
