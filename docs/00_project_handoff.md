@@ -71,6 +71,7 @@ Please execute the build in the following order, strictly adhering to the rules 
 2. Implement **Flow C (Discovery & Household Drawer)**:
    - Render grouped **Household Pins** with stacked avatars and filters (`Exact Town vs. All Gujarat`, `Radius`, `Age Bracket`, `Life Stage`).
    - Household bottom sheet showing all linked members, trust badges (`Verified Local`, `Vouched by Neighbors`), 1-tap icebreakers, and WhatsApp handoff (`wa.me`) upon acceptance.
+   - *RPC note for multi-origin households:* In `find_matching_households` (Step 1), filtering `u.hometown_geog` in the `WHERE` clause before `JSONB_AGG` returns only the member(s) matching the searched hometown (e.g., searching Ahmedabad returns only the Ahmedabad spouse of a mixed Ahmedabad/Vadodara household). To show **all** linked active members in the Household Bottom Sheet once a household matches, add a follow-up migration in Step 2 using an `EXISTS` subquery for the hometown/age filter and aggregating all active members of the matched household.
 
 ### Step 3: Implement Edge Security & Attestation (`docs/04`)
 1. Build Supabase Edge Functions for:
