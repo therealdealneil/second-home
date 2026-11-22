@@ -1,0 +1,25 @@
+{
+  "name": "second-home",
+  "private": true,
+  "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev:web": "turbo run dev --filter=@second-home/web",
+    "dev:mobile": "pnpm --filter @second-home/mobile start",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "supabase": "supabase"
+  },
+  "devDependencies": {
+    "turbo": "latest",
+    "typescript": "~5.9.2",
+    "prettier": "latest",
+    "supabase": "latest"
+  }
+}

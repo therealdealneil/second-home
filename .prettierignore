@@ -1,0 +1,12 @@
+pnpm-lock.yaml
+node_modules
+.turbo
+.next
+.expo
+.expo-export-check
+dist
+coverage
+supabase/migrations
+supabase/config.toml
+docs
+project_summary_antigravity_handoff.md

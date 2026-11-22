@@ -1,0 +1,28 @@
+node_modules
+.turbo
+.next
+dist
+.expo
+.expo-export-check
+coverage
+*.tsbuildinfo
+next-env.d.ts
+
+# Expo prebuild output
+apps/mobile/ios
+apps/mobile/android
+
+# Env files (keep examples)
+.env
+.env.*
+!.env.example
+
+# Supabase local
+supabase/.temp
+supabase/.branches
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
