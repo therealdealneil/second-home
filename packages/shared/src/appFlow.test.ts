@@ -153,6 +153,19 @@ describe("appFlowReducer Flow B -> Soft Auth -> Flow C", () => {
         neighborhood: { label: "Stone Oak", fuzzedCenter: { lat: 29.65, lng: -98.48 } },
       }).phase,
     ).toBe("discovery");
+
+    // Authenticated user missing a neighborhood can still confirm it and advance
+    const authedMissingNeighborhood = {
+      ...INITIAL_APP_FLOW_STATE,
+      isAuthenticated: true,
+      selectedOrigin: AHMEDABAD,
+    };
+    const confirmed = appFlowReducer(authedMissingNeighborhood, {
+      type: "CONFIRM_NEIGHBORHOOD",
+      neighborhood: MEDICAL_CENTER,
+    });
+    expect(confirmed.confirmedNeighborhood).toEqual(MEDICAL_CENTER);
+    expect(confirmed.phase).toBe("personalize");
   });
 });
 

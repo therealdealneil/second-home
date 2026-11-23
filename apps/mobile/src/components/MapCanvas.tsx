@@ -81,6 +81,7 @@ export function MapCanvas({
   const prevTargetKeyRef = useRef(0);
   const prevSyncKeyRef = useRef<string | null>(null);
   const lastProgrammaticCameraMsRef = useRef(0);
+  const userInteractedSinceProgrammaticRef = useRef(false);
   const lastIdleZoomRef = useRef<number | null>(null);
 
   const privacyRingRef = useRef(privacyRing);
@@ -146,6 +147,7 @@ export function MapCanvas({
     }
 
     lastProgrammaticCameraMsRef.current = Date.now();
+    userInteractedSinceProgrammaticRef.current = false;
     lastIdleZoomRef.current = chosen.zoomLevel;
     cameraRef.current.setCamera({
       centerCoordinate: [chosen.center.lng, chosen.center.lat],
@@ -167,6 +169,12 @@ export function MapCanvas({
     [privacyRing],
   );
 
+  const handleCameraChanged = useCallback((mapState: MapIdleState) => {
+    if (mapState.gestures?.isGestureActive) {
+      userInteractedSinceProgrammaticRef.current = true;
+    }
+  }, []);
+
   const handleMapIdle = useCallback((mapState: MapIdleState) => {
     const zoom = mapState.properties.zoom;
     const prevZoom = lastIdleZoomRef.current;
@@ -174,10 +182,14 @@ export function MapCanvas({
       lastIdleZoomRef.current = zoom;
     }
 
+    const hasUserGesture =
+      mapState.gestures?.isGestureActive || userInteractedSinceProgrammaticRef.current;
+    userInteractedSinceProgrammaticRef.current = false;
+
     if (!interactiveDragAdjustRef.current || !onMapIdleCenterChangeRef.current) {
       return;
     }
-    if (Date.now() - lastProgrammaticCameraMsRef.current < 850) {
+    if (Date.now() - lastProgrammaticCameraMsRef.current < 850 && !hasUserGesture) {
       return;
     }
     // Ignore pure pinch/double-tap zoom adjustments so zooming doesn't relocate the ring.
@@ -280,6 +292,7 @@ export function MapCanvas({
       style={styles.map}
       styleURL={DEFAULT_STYLE_URL}
       projection="mercator"
+      onCameraChanged={handleCameraChanged}
       onMapIdle={handleMapIdle}
     >
       <Camera ref={setCameraNode} defaultSettings={initialCameraSettings} />

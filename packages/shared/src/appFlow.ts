@@ -127,12 +127,20 @@ export function appFlowReducer(state: AppFlowState, action: AppFlowAction): AppF
     }
 
     case "CONFIRM_NEIGHBORHOOD": {
-      if (state.isAuthenticated) {
+      if (state.isAuthenticated && state.confirmedNeighborhood !== null) {
         return state;
       }
       // Never skip San Antonio GPS confirmation, even with ?origin_id deep link;
-      // once confirmed, jump straight to blurred_preview if origin is already pre-filled.
-      const nextPhase: AppFlowPhase = state.selectedOrigin ? "blurred_preview" : "select_hometown";
+      // resolve next phase from remaining prerequisites.
+      const nextPhase = resolveValidatedPhase(
+        state.selectedOrigin ? "blurred_preview" : "select_hometown",
+        {
+          confirmedNeighborhood: action.neighborhood,
+          selectedOrigin: state.selectedOrigin,
+          isAuthenticated: state.isAuthenticated,
+          hasCompletedPersonalization: state.hasCompletedPersonalization,
+        },
+      );
       return {
         ...state,
         confirmedNeighborhood: action.neighborhood,
