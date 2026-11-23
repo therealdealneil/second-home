@@ -1,22 +1,23 @@
 import {
+  PRIVACY_RING_DISPLAY_RADIUS_MILES,
   SAN_ANTONIO_DEFAULT_CENTER,
-  getGujaratLocationById,
+  SAN_ANTONIO_DEFAULT_ZOOM,
+  evaluateBlurredPreviewMatches,
   parseOriginDeepLinkParam,
+  type ConfirmedNeighborhood,
+  type GujaratLocation,
 } from "@second-home/shared";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { KeyboardAvoidingView, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MapCanvas } from "@/components/MapCanvas";
+import { MapCanvas, type MapCameraTarget, type MapSyncCamera } from "@/components/MapCanvas";
+import { BlurredPreviewCard } from "@/components/onboarding/BlurredPreviewCard";
+import { GujaratAutocompleteCard } from "@/components/onboarding/GujaratAutocompleteCard";
+import { NeighborhoodConfirmCard } from "@/components/onboarding/NeighborhoodConfirmCard";
+import { MOCK_SAN_ANTONIO_HOUSEHOLDS } from "@/data/mockHouseholds";
+import { useSanAntonioLocation } from "@/hooks/useSanAntonioLocation";
 import { useAppFlow } from "@/state/AppFlowContext";
-
-const SAMPLE_FUZZED_NEIGHBORHOOD = {
-  label: "Medical Center",
-  fuzzedCenter: {
-    lat: 29.5215,
-    lng: -98.5647,
-  },
-};
 
 const SAMPLE_MOCK_HOUSEHOLD_ID = "20000000-0000-4000-8000-000000000001";
 
@@ -32,7 +33,38 @@ export default function MapHomeScreen() {
     completePersonalization,
     resetPrototypeFlow,
   } = useAppFlow();
+
   const lastOriginParamRef = useRef<string | null>(null);
+  const [cameraTarget, setCameraTarget] = useState<MapCameraTarget>({
+    center: SAN_ANTONIO_DEFAULT_CENTER,
+    zoomLevel: SAN_ANTONIO_DEFAULT_ZOOM,
+    key: 0,
+  });
+
+  const moveCamera = useCallback((center: { lat: number; lng: number }, zoomLevel: number) => {
+    setCameraTarget((prev) => ({
+      center,
+      zoomLevel,
+      key: prev.key + 1,
+    }));
+  }, []);
+
+  const handleSnappedLocation = useCallback(
+    (neighborhood: ConfirmedNeighborhood) => {
+      moveCamera(neighborhood.fuzzedCenter, 13.2);
+    },
+    [moveCamera],
+  );
+
+  const handleOutsideSanAntonio = useCallback(() => {
+    router.push("/waitlist");
+  }, [router]);
+
+  const location = useSanAntonioLocation({
+    existingNeighborhood: state.confirmedNeighborhood,
+    onSnapped: handleSnappedLocation,
+    onOutsideSanAntonio: handleOutsideSanAntonio,
+  });
 
   useEffect(() => {
     if (!isHydrated) {
@@ -63,22 +95,168 @@ export default function MapHomeScreen() {
     }, [dispatch, router, state.pendingIntent, state.phase]),
   );
 
-  const mapCenter = state.confirmedNeighborhood?.fuzzedCenter ?? SAN_ANTONIO_DEFAULT_CENTER;
+  const blurredPreview = useMemo(() => {
+    if (!state.confirmedNeighborhood || !state.selectedOrigin) {
+      return null;
+    }
+    return evaluateBlurredPreviewMatches({
+      households: MOCK_SAN_ANTONIO_HOUSEHOLDS,
+      neighborhoodCenter: state.confirmedNeighborhood.fuzzedCenter,
+      selectedOrigin: state.selectedOrigin,
+    });
+  }, [state.confirmedNeighborhood, state.selectedOrigin]);
+
+  const syncCamera = useMemo<MapSyncCamera | null>(() => {
+    if (!isHydrated || !state.confirmedNeighborhood) {
+      return null;
+    }
+    if (state.phase === "select_hometown") {
+      return {
+        center: state.confirmedNeighborhood.fuzzedCenter,
+        zoomLevel: 12.6,
+        key: `select_hometown:${state.confirmedNeighborhood.fuzzedCenter.lat}:${state.confirmedNeighborhood.fuzzedCenter.lng}`,
+      };
+    }
+    if (
+      state.phase === "blurred_preview" ||
+      state.phase === "personalize" ||
+      state.phase === "discovery"
+    ) {
+      const zoom = blurredPreview?.recommendedZoom ?? 11.1;
+      return {
+        center: state.confirmedNeighborhood.fuzzedCenter,
+        zoomLevel: zoom,
+        key: `${state.phase}:${state.selectedOrigin?.id ?? "none"}:${zoom}`,
+      };
+    }
+    return {
+      center: state.confirmedNeighborhood.fuzzedCenter,
+      zoomLevel: 13.2,
+      key: `confirm_neighborhood:${state.confirmedNeighborhood.fuzzedCenter.lat}:${state.confirmedNeighborhood.fuzzedCenter.lng}`,
+    };
+  }, [
+    blurredPreview?.recommendedZoom,
+    isHydrated,
+    state.confirmedNeighborhood,
+    state.phase,
+    state.selectedOrigin?.id,
+  ]);
+
+  const handleConfirmNeighborhood = useCallback(
+    (neighborhood: ConfirmedNeighborhood) => {
+      confirmNeighborhood(neighborhood);
+      if (state.selectedOrigin) {
+        const nextPreview = evaluateBlurredPreviewMatches({
+          households: MOCK_SAN_ANTONIO_HOUSEHOLDS,
+          neighborhoodCenter: neighborhood.fuzzedCenter,
+          selectedOrigin: state.selectedOrigin,
+        });
+        moveCamera(neighborhood.fuzzedCenter, nextPreview.recommendedZoom);
+      } else {
+        moveCamera(neighborhood.fuzzedCenter, 12.6);
+      }
+    },
+    [confirmNeighborhood, moveCamera, state.selectedOrigin],
+  );
+
+  const handleSelectOrigin = useCallback(
+    (origin: GujaratLocation) => {
+      dispatch({ type: "SELECT_ORIGIN", origin });
+      if (state.confirmedNeighborhood) {
+        const nextPreview = evaluateBlurredPreviewMatches({
+          households: MOCK_SAN_ANTONIO_HOUSEHOLDS,
+          neighborhoodCenter: state.confirmedNeighborhood.fuzzedCenter,
+          selectedOrigin: origin,
+        });
+        moveCamera(state.confirmedNeighborhood.fuzzedCenter, nextPreview.recommendedZoom);
+      }
+    },
+    [dispatch, moveCamera, state.confirmedNeighborhood],
+  );
+
+  const handleEditNeighborhood = useCallback(() => {
+    dispatch({ type: "EDIT_NEIGHBORHOOD" });
+    const focusCenter =
+      location.candidate?.fuzzedCenter ??
+      state.confirmedNeighborhood?.fuzzedCenter ??
+      SAN_ANTONIO_DEFAULT_CENTER;
+    moveCamera(focusCenter, 13.2);
+  }, [dispatch, location.candidate, moveCamera, state.confirmedNeighborhood]);
+
+  const handleEditOrigin = useCallback(() => {
+    dispatch({ type: "EDIT_ORIGIN" });
+    if (state.confirmedNeighborhood) {
+      moveCamera(state.confirmedNeighborhood.fuzzedCenter, 12.6);
+    }
+  }, [dispatch, moveCamera, state.confirmedNeighborhood]);
+
+  const handleReset = useCallback(() => {
+    location.resetLocationCapture();
+    resetPrototypeFlow();
+    moveCamera(SAN_ANTONIO_DEFAULT_CENTER, SAN_ANTONIO_DEFAULT_ZOOM);
+  }, [location, moveCamera, resetPrototypeFlow]);
+
+  const privacyRing = useMemo(() => {
+    if (state.phase === "confirm_neighborhood") {
+      return location.candidate
+        ? {
+            center: location.candidate.fuzzedCenter,
+            radiusMiles: PRIVACY_RING_DISPLAY_RADIUS_MILES,
+          }
+        : null;
+    }
+    if (
+      (state.phase === "select_hometown" || state.phase === "blurred_preview") &&
+      state.confirmedNeighborhood
+    ) {
+      return {
+        center: state.confirmedNeighborhood.fuzzedCenter,
+        radiusMiles: PRIVACY_RING_DISPLAY_RADIUS_MILES,
+      };
+    }
+    return null;
+  }, [location.candidate, state.confirmedNeighborhood, state.phase]);
+
+  const activeBlurredPins = useMemo(
+    () => (state.phase === "blurred_preview" && blurredPreview ? blurredPreview.households : []),
+    [blurredPreview, state.phase],
+  );
+
+  const handlePressBlurredPin = useCallback(
+    (householdId: string) => {
+      openAuthForIntent({ type: "open_household", householdId });
+    },
+    [openAuthForIntent],
+  );
 
   return (
     <View style={styles.container}>
-      <MapCanvas center={mapCenter} />
+      <MapCanvas
+        cameraTarget={cameraTarget}
+        syncCamera={syncCamera}
+        privacyRing={privacyRing}
+        blurredPins={activeBlurredPins}
+        onPressBlurredPin={handlePressBlurredPin}
+        interactiveDragAdjust={
+          state.phase === "confirm_neighborhood" && location.status === "snapped"
+        }
+        onMapIdleCenterChange={location.adjustCandidateCenter}
+      />
 
       <SafeAreaView pointerEvents="box-none" style={styles.overlay}>
         <View pointerEvents="box-none" style={styles.topBar}>
           <View style={styles.badge}>
             <Text style={styles.badgeTitle}>Second Home · San Antonio</Text>
-            <Text style={styles.badgeSub}>Phase: {state.phase}</Text>
+            <Text style={styles.badgeSub}>
+              {state.confirmedNeighborhood
+                ? `Near ${state.confirmedNeighborhood.label}`
+                : "Gujarat → San Antonio"}
+            </Text>
           </View>
 
-          {state.selectedOrigin ? (
+          {state.selectedOrigin && state.phase === "confirm_neighborhood" ? (
             <View style={styles.chip}>
-              <Text style={styles.chipText}>Origin: {state.selectedOrigin.displayName}</Text>
+              <Text style={styles.chipText}>Pre-selected origin: {state.selectedOrigin.name}</Text>
             </View>
           ) : null}
 
@@ -91,95 +269,61 @@ export default function MapHomeScreen() {
           ) : null}
         </View>
 
-        <View style={styles.bottomCard}>
+        <KeyboardAvoidingView
+          behavior="padding"
+          pointerEvents="box-none"
+          style={styles.bottomStack}
+        >
           {state.phase === "confirm_neighborhood" ? (
-            <>
-              <Text style={styles.cardTitle}>Confirm your neighborhood in San Antonio</Text>
-              <Text style={styles.cardBody}>
-                Map-first launch with zero upfront login wall. Step 2.2 replaces this card with live
-                GPS capture & ~1 mi fuzzing ring.
-              </Text>
-              <View style={styles.actionsRow}>
-                <Pressable
-                  style={styles.primaryButton}
-                  onPress={() => confirmNeighborhood(SAMPLE_FUZZED_NEIGHBORHOOD)}
-                >
-                  <Text style={styles.primaryButtonText}>Confirm Neighborhood</Text>
-                </Pressable>
-                <Pressable style={styles.secondaryButton} onPress={() => router.push("/waitlist")}>
-                  <Text style={styles.secondaryButtonText}>Outside SA?</Text>
-                </Pressable>
-              </View>
-            </>
+            <NeighborhoodConfirmCard
+              status={location.status}
+              candidate={location.candidate}
+              offsetMiles={location.offsetMiles}
+              errorMessage={location.errorMessage}
+              onCaptureGps={() => void location.captureHardwareGps()}
+              onConfirm={handleConfirmNeighborhood}
+              onRecenter={location.recenterToAnchor}
+              onOpenWaitlist={() => router.push("/waitlist")}
+              onSimulateGps={location.simulateGpsFix}
+            />
           ) : null}
 
           {state.phase === "select_hometown" ? (
-            <>
-              <Text style={styles.cardTitle}>Where in Gujarat is home?</Text>
-              <Text style={styles.cardBody}>
-                Step 2.2 adds instant gazetteer autocomplete. Test a sample origin below:
-              </Text>
-              <View style={styles.actionsRow}>
-                <Pressable
-                  style={styles.primaryButton}
-                  onPress={() => {
-                    const fallbackOrigin = getGujaratLocationById("ahmedabad-navrangpura");
-                    if (fallbackOrigin) {
-                      dispatch({ type: "SELECT_ORIGIN", origin: fallbackOrigin });
-                    }
-                  }}
-                >
-                  <Text style={styles.primaryButtonText}>Select Navrangpura, Ahmedabad</Text>
-                </Pressable>
-              </View>
-            </>
+            <GujaratAutocompleteCard
+              neighborhoodLabel={state.confirmedNeighborhood?.label ?? "San Antonio"}
+              selectedOrigin={state.selectedOrigin}
+              onSelectOrigin={handleSelectOrigin}
+              onEditNeighborhood={handleEditNeighborhood}
+            />
           ) : null}
 
-          {state.phase === "blurred_preview" ? (
-            <>
-              <Text style={styles.cardTitle}>Blurred Match Preview</Text>
-              <Text style={styles.cardBody}>
-                Neighborhood: {state.confirmedNeighborhood?.label ?? "San Antonio"} · Origin:{" "}
-                {state.selectedOrigin?.displayName ?? "Gujarat"}
-              </Text>
-              <View style={styles.actionsRow}>
-                <Pressable
-                  style={styles.primaryButton}
-                  onPress={() => openAuthForIntent({ type: "unlock_map" })}
-                >
-                  <Text style={styles.primaryButtonText}>Unlock Neighbors</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.secondaryButton}
-                  onPress={() =>
-                    openAuthForIntent({
-                      type: "open_household",
-                      householdId: SAMPLE_MOCK_HOUSEHOLD_ID,
-                    })
-                  }
-                >
-                  <Text style={styles.secondaryButtonText}>Tap Blurred Pin</Text>
-                </Pressable>
-              </View>
-            </>
+          {state.phase === "blurred_preview" && blurredPreview && state.selectedOrigin ? (
+            <BlurredPreviewCard
+              preview={blurredPreview}
+              selectedOrigin={state.selectedOrigin}
+              neighborhoodLabel={state.confirmedNeighborhood?.label ?? "San Antonio"}
+              onChangeOrigin={handleEditOrigin}
+              onEditNeighborhood={handleEditNeighborhood}
+              onUnlock={() => openAuthForIntent({ type: "unlock_map" })}
+            />
           ) : null}
 
           {state.phase === "personalize" ? (
-            <>
+            <View style={styles.bottomCard}>
               <Text style={styles.cardTitle}>3-Second Personalization</Text>
               <Text style={styles.cardBody}>
-                Step 2.2 renders 1-tap Age Bracket, Life Stage & Interest pills here.
+                Age Bracket, Life Stage & Interest pills land next in Flow B Step 5.
               </Text>
               <View style={styles.actionsRow}>
                 <Pressable style={styles.primaryButton} onPress={() => completePersonalization()}>
                   <Text style={styles.primaryButtonText}>Continue to Discovery</Text>
                 </Pressable>
               </View>
-            </>
+            </View>
           ) : null}
 
           {state.phase === "discovery" ? (
-            <>
+            <View style={styles.bottomCard}>
               <Text style={styles.cardTitle}>Discovery Map Active</Text>
               <Text style={styles.cardBody}>
                 Filters: {state.filters.originMode === "exact_town" ? "Exact Town" : "All Gujarat"}{" "}
@@ -201,15 +345,15 @@ export default function MapHomeScreen() {
                   <Text style={styles.secondaryButtonText}>Filters</Text>
                 </Pressable>
               </View>
-            </>
+            </View>
           ) : null}
 
-          {state.phase !== "confirm_neighborhood" ? (
-            <Pressable style={styles.resetLink} onPress={resetPrototypeFlow}>
-              <Text style={styles.resetLinkText}>Reset prototype flow</Text>
+          {state.phase !== "confirm_neighborhood" || location.status === "snapped" ? (
+            <Pressable style={styles.resetPill} onPress={handleReset}>
+              <Text style={styles.resetPillText}>Reset prototype flow</Text>
             </Pressable>
           ) : null}
-        </View>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </View>
   );
@@ -276,6 +420,9 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#92400E",
   },
+  bottomStack: {
+    gap: 8,
+  },
   bottomCard: {
     backgroundColor: "rgba(255, 255, 255, 0.96)",
     borderRadius: 20,
@@ -327,12 +474,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
   },
-  resetLink: {
-    alignSelf: "flex-start",
-    paddingTop: 2,
+  resetPill: {
+    alignSelf: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.88)",
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
-  resetLinkText: {
-    fontSize: 12,
+  resetPillText: {
+    fontSize: 11,
     fontWeight: "600",
     color: "#64748B",
   },

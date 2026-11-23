@@ -1,35 +1,108 @@
-import { SAN_ANTONIO_DEFAULT_CENTER, SAN_ANTONIO_DEFAULT_ZOOM } from "@second-home/shared";
-import { useEffect, useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import { getMapboxPublicToken, hasNativeMapboxModule, loadMapboxModule } from "@/lib/mapbox";
+import { Ionicons } from "@expo/vector-icons";
+import {
+  SAN_ANTONIO_DEFAULT_CENTER,
+  SAN_ANTONIO_DEFAULT_ZOOM,
+  createCirclePolygonGeoJSON,
+  haversineDistanceMeters,
+  type LatLng,
+  type MatchedHouseholdPin,
+} from "@second-home/shared";
+import { BlurView } from "expo-blur";
+import * as Haptics from "expo-haptics";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ComponentRef,
+} from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  getMapboxPublicToken,
+  hasNativeMapboxModule,
+  loadMapboxModule,
+  type MapboxModule,
+} from "@/lib/mapbox";
+
+type CameraRef = ComponentRef<MapboxModule["Camera"]>;
+type MapIdleState = Parameters<
+  NonNullable<ComponentProps<MapboxModule["MapView"]>["onMapIdle"]>
+>[0];
 
 const DEFAULT_STYLE_URL = "mapbox://styles/mapbox/streets-v12";
+const PIN_PALETTE = ["#0F766E", "#0369A1", "#B45309", "#7C3AED", "#BE123C"] as const;
+
+export type MapCameraTarget = {
+  center: LatLng;
+  zoomLevel: number;
+  key: number;
+};
+
+export type MapSyncCamera = {
+  center: LatLng;
+  zoomLevel: number;
+  key: string;
+};
 
 export type MapCanvasProps = {
-  center?: { lat: number; lng: number };
-  zoomLevel?: number;
+  cameraTarget?: MapCameraTarget;
+  syncCamera?: MapSyncCamera | null;
+  privacyRing?: { center: LatLng; radiusMiles: number } | null;
+  blurredPins?: readonly MatchedHouseholdPin[];
+  onPressBlurredPin?: (householdId: string) => void;
+  interactiveDragAdjust?: boolean;
+  onMapIdleCenterChange?: (center: LatLng) => void;
+};
+
+const DEFAULT_CAMERA_TARGET: MapCameraTarget = {
+  center: SAN_ANTONIO_DEFAULT_CENTER,
+  zoomLevel: SAN_ANTONIO_DEFAULT_ZOOM,
+  key: 0,
 };
 
 export function MapCanvas({
-  center = SAN_ANTONIO_DEFAULT_CENTER,
-  zoomLevel = SAN_ANTONIO_DEFAULT_ZOOM,
+  cameraTarget = DEFAULT_CAMERA_TARGET,
+  syncCamera = null,
+  privacyRing = null,
+  blurredPins = [],
+  onPressBlurredPin,
+  interactiveDragAdjust = false,
+  onMapIdleCenterChange,
 }: MapCanvasProps) {
   const token = getMapboxPublicToken();
   const hasNative = hasNativeMapboxModule();
   const mapbox = useMemo(() => (token ? loadMapboxModule() : null), [token]);
   const [tokenReady, setTokenReady] = useState(false);
+  const [cameraMounted, setCameraMounted] = useState(false);
 
-  const centerCoordinate = useMemo<[number, number]>(
-    () => [center.lng, center.lat],
-    [center.lat, center.lng],
-  );
-  const defaultSettings = useMemo(
-    () => ({
-      centerCoordinate,
-      zoomLevel,
-    }),
-    [centerCoordinate, zoomLevel],
-  );
+  const cameraRef = useRef<CameraRef | null>(null);
+  const prevTargetKeyRef = useRef(0);
+  const prevSyncKeyRef = useRef<string | null>(null);
+  const lastProgrammaticCameraMsRef = useRef(0);
+  const userInteractedSinceProgrammaticRef = useRef(false);
+  const lastIdleZoomRef = useRef<number | null>(null);
+
+  const privacyRingRef = useRef(privacyRing);
+  const interactiveDragAdjustRef = useRef(interactiveDragAdjust);
+  const onMapIdleCenterChangeRef = useRef(onMapIdleCenterChange);
+
+  useEffect(() => {
+    privacyRingRef.current = privacyRing;
+    interactiveDragAdjustRef.current = interactiveDragAdjust;
+    onMapIdleCenterChangeRef.current = onMapIdleCenterChange;
+  }, [interactiveDragAdjust, onMapIdleCenterChange, privacyRing]);
+
+  const [initialCameraSettings] = useState(() => ({
+    centerCoordinate: [cameraTarget.center.lng, cameraTarget.center.lat] as [number, number],
+    zoomLevel: cameraTarget.zoomLevel,
+  }));
+
+  const setCameraNode = useCallback((node: CameraRef | null) => {
+    cameraRef.current = node;
+    setCameraMounted(node !== null);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -40,7 +113,7 @@ export function MapCanvas({
         return;
       }
       try {
-        await mapbox.setAccessToken(token);
+        await Promise.resolve(mapbox.setAccessToken(token));
         if (!cancelled) {
           setTokenReady(true);
         }
@@ -57,6 +130,97 @@ export function MapCanvas({
     };
   }, [mapbox, token]);
 
+  useEffect(() => {
+    if (!tokenReady || !cameraMounted || !cameraRef.current) {
+      return;
+    }
+
+    const targetChanged = cameraTarget.key > 0 && cameraTarget.key !== prevTargetKeyRef.current;
+    const syncChanged = Boolean(syncCamera && syncCamera.key !== prevSyncKeyRef.current);
+
+    prevTargetKeyRef.current = cameraTarget.key;
+    prevSyncKeyRef.current = syncCamera?.key ?? null;
+
+    const chosen = targetChanged ? cameraTarget : syncChanged ? syncCamera : null;
+    if (!chosen) {
+      return;
+    }
+
+    lastProgrammaticCameraMsRef.current = Date.now();
+    userInteractedSinceProgrammaticRef.current = false;
+    lastIdleZoomRef.current = chosen.zoomLevel;
+    cameraRef.current.setCamera({
+      centerCoordinate: [chosen.center.lng, chosen.center.lat],
+      zoomLevel: chosen.zoomLevel,
+      animationDuration: 550,
+      animationMode: "easeTo",
+    });
+  }, [cameraMounted, cameraTarget, syncCamera, tokenReady]);
+
+  const ringShape = useMemo(() => {
+    if (!privacyRing) {
+      return null;
+    }
+    return createCirclePolygonGeoJSON(privacyRing.center, privacyRing.radiusMiles);
+  }, [privacyRing]);
+
+  const ringCenterCoord = useMemo<[number, number] | null>(
+    () => (privacyRing ? [privacyRing.center.lng, privacyRing.center.lat] : null),
+    [privacyRing],
+  );
+
+  const handleCameraChanged = useCallback((mapState: MapIdleState) => {
+    if (mapState.gestures?.isGestureActive) {
+      userInteractedSinceProgrammaticRef.current = true;
+    }
+  }, []);
+
+  const handleMapIdle = useCallback((mapState: MapIdleState) => {
+    const zoom = mapState.properties.zoom;
+    const prevZoom = lastIdleZoomRef.current;
+    if (typeof zoom === "number") {
+      lastIdleZoomRef.current = zoom;
+    }
+
+    const hasUserGesture =
+      mapState.gestures?.isGestureActive || userInteractedSinceProgrammaticRef.current;
+    userInteractedSinceProgrammaticRef.current = false;
+
+    if (!interactiveDragAdjustRef.current || !onMapIdleCenterChangeRef.current) {
+      return;
+    }
+    if (Date.now() - lastProgrammaticCameraMsRef.current < 850 && !hasUserGesture) {
+      return;
+    }
+    // Ignore pure pinch/double-tap zoom adjustments so zooming doesn't relocate the ring.
+    if (typeof zoom === "number" && prevZoom !== null && Math.abs(zoom - prevZoom) > 0.15) {
+      return;
+    }
+
+    const centerPos = mapState.properties.center;
+    const lng = centerPos[0];
+    const lat = centerPos[1];
+    if (typeof lng !== "number" || typeof lat !== "number") {
+      return;
+    }
+    const nextCenter = { lat, lng };
+    const activeRing = privacyRingRef.current;
+    if (activeRing && haversineDistanceMeters(activeRing.center, nextCenter) < 25) {
+      return;
+    }
+    onMapIdleCenterChangeRef.current(nextCenter);
+  }, []);
+
+  const handleBlurredPinPress = useCallback(
+    (householdId: string) => {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      onPressBlurredPin?.(householdId);
+    },
+    [onPressBlurredPin],
+  );
+
+  const displayFocus = syncCamera ?? cameraTarget;
+
   if (!mapbox || !token) {
     return (
       <View style={styles.fallbackContainer}>
@@ -72,8 +236,46 @@ export function MapCanvas({
               : "Native Mapbox bindings are unavailable in this runtime (e.g., Expo Go). Run a Development Build (expo-dev-client) for interactive map rendering."}
           </Text>
           <Text style={styles.fallbackCoords}>
-            Focal Point: {center.lat.toFixed(4)}, {center.lng.toFixed(4)} (z{zoomLevel})
+            Focal Point: {displayFocus.center.lat.toFixed(4)}, {displayFocus.center.lng.toFixed(4)}{" "}
+            (z{displayFocus.zoomLevel})
           </Text>
+
+          {privacyRing ? (
+            <View style={styles.fallbackRingBadge}>
+              <Ionicons name="shield-checkmark" size={14} color="#0F766E" />
+              <Text style={styles.fallbackRingText}>
+                ~{privacyRing.radiusMiles.toFixed(1)} mi privacy ring active (
+                {privacyRing.center.lat.toFixed(4)}, {privacyRing.center.lng.toFixed(4)})
+              </Text>
+            </View>
+          ) : null}
+
+          {blurredPins.length > 0 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.fallbackPinsRow}
+            >
+              {blurredPins.slice(0, 8).map((pin, index) => (
+                <Pressable
+                  key={pin.householdId}
+                  style={styles.fallbackPinPill}
+                  onPress={() => handleBlurredPinPress(pin.householdId)}
+                >
+                  <View
+                    style={[
+                      styles.fallbackPinDot,
+                      { backgroundColor: PIN_PALETTE[index % PIN_PALETTE.length] },
+                    ]}
+                  />
+                  <Text style={styles.fallbackPinText}>
+                    {pin.distanceMiles.toFixed(1)} mi · {pin.members.length} member
+                    {pin.members.length !== 1 ? "s" : ""}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : null}
         </View>
       </View>
     );
@@ -83,17 +285,80 @@ export function MapCanvas({
     return <View style={styles.fallbackContainer} />;
   }
 
-  const { MapView, Camera } = mapbox;
+  const { MapView, Camera, ShapeSource, FillLayer, LineLayer, MarkerView } = mapbox;
 
   return (
-    <MapView style={styles.map} styleURL={DEFAULT_STYLE_URL} projection="mercator">
-      <Camera
-        defaultSettings={defaultSettings}
-        centerCoordinate={centerCoordinate}
-        zoomLevel={zoomLevel}
-        animationMode="easeTo"
-        animationDuration={600}
-      />
+    <MapView
+      style={styles.map}
+      styleURL={DEFAULT_STYLE_URL}
+      projection="mercator"
+      onCameraChanged={handleCameraChanged}
+      onMapIdle={handleMapIdle}
+    >
+      <Camera ref={setCameraNode} defaultSettings={initialCameraSettings} />
+
+      {ringShape ? (
+        <ShapeSource id="privacy-ring-source" shape={ringShape}>
+          <FillLayer
+            id="privacy-ring-fill"
+            style={{
+              fillColor: "#0F766E",
+              fillOpacity: 0.14,
+            }}
+          />
+          <LineLayer
+            id="privacy-ring-outline"
+            style={{
+              lineColor: "#0F766E",
+              lineWidth: 2.5,
+              lineOpacity: 0.85,
+            }}
+          />
+        </ShapeSource>
+      ) : null}
+
+      {ringCenterCoord ? (
+        <MarkerView coordinate={ringCenterCoord} anchor={{ x: 0.5, y: 0.5 }} allowOverlap>
+          <View style={styles.homeRingMarker}>
+            <View style={styles.homeRingInner}>
+              <Ionicons name="home" size={14} color="#FFFFFF" />
+            </View>
+          </View>
+        </MarkerView>
+      ) : null}
+
+      {blurredPins.map((pin, index) => {
+        const tintColor = PIN_PALETTE[index % PIN_PALETTE.length];
+        return (
+          <MarkerView
+            key={pin.householdId}
+            coordinate={[pin.publicLng, pin.publicLat]}
+            anchor={{ x: 0.5, y: 0.5 }}
+            allowOverlap
+          >
+            <Pressable
+              accessibilityLabel="Blurred nearby household pin"
+              accessibilityRole="button"
+              style={styles.blurredPinWrapper}
+              onPress={() => handleBlurredPinPress(pin.householdId)}
+            >
+              <View style={[styles.blurredAvatarBackdrop, { backgroundColor: tintColor }]}>
+                {/* Pre-auth pins only render generic icons; Android defaults BlurView to translucent veil */}
+                <Ionicons name="people" size={16} color="rgba(255,255,255,0.65)" />
+                <BlurView intensity={36} tint="light" style={styles.blurredAvatarVeil} />
+              </View>
+              {pin.members.length > 1 ? (
+                <View style={styles.stackedCountBadge}>
+                  <Text style={styles.stackedCountText}>{pin.members.length}</Text>
+                </View>
+              ) : null}
+              <View style={styles.pinLockDot}>
+                <Ionicons name="lock-closed" size={9} color="#0F172A" />
+              </View>
+            </Pressable>
+          </MarkerView>
+        );
+      })}
     </MapView>
   );
 }
@@ -101,6 +366,90 @@ export function MapCanvas({
 const styles = StyleSheet.create({
   map: {
     flex: 1,
+  },
+  homeRingMarker: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(15, 118, 110, 0.22)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  homeRingInner: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "#0F766E",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  blurredPinWrapper: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  blurredAvatarBackdrop: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  blurredAvatarVeil: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: "rgba(255, 255, 255, 0.42)",
+  },
+  stackedCountBadge: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    minWidth: 17,
+    height: 17,
+    borderRadius: 9,
+    backgroundColor: "#0F172A",
+    borderWidth: 1.5,
+    borderColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+  },
+  stackedCountText: {
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: "700",
+  },
+  pinLockDot: {
+    position: "absolute",
+    bottom: 0,
+    right: 2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    alignItems: "center",
+    justifyContent: "center",
   },
   fallbackContainer: {
     flex: 1,
@@ -152,5 +501,48 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     color: "#64748B",
+  },
+  fallbackRingBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#F0FDFA",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: "#CCFBF1",
+  },
+  fallbackRingText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#115E59",
+  },
+  fallbackPinsRow: {
+    gap: 8,
+    paddingTop: 6,
+  },
+  fallbackPinPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  fallbackPinDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    opacity: 0.5,
+  },
+  fallbackPinText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#334155",
   },
 });

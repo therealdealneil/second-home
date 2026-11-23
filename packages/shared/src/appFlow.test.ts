@@ -119,6 +119,54 @@ describe("appFlowReducer Flow B -> Soft Auth -> Flow C", () => {
     expect(afterAuth.pendingIntent).toBeNull();
     expect(afterAuth.phase).toBe("personalize");
   });
+
+  it("supports pre-auth editing of neighborhood and Gujarat origin", () => {
+    const atOrigin = {
+      ...INITIAL_APP_FLOW_STATE,
+      phase: "select_hometown" as const,
+      confirmedNeighborhood: MEDICAL_CENTER,
+    };
+    const backToMap = appFlowReducer(atOrigin, { type: "EDIT_NEIGHBORHOOD" });
+    expect(backToMap.phase).toBe("confirm_neighborhood");
+    expect(backToMap.confirmedNeighborhood).toEqual(MEDICAL_CENTER);
+
+    const atPreview = {
+      ...INITIAL_APP_FLOW_STATE,
+      phase: "blurred_preview" as const,
+      confirmedNeighborhood: MEDICAL_CENTER,
+      selectedOrigin: AHMEDABAD,
+    };
+    const backToOrigin = appFlowReducer(atPreview, { type: "EDIT_ORIGIN" });
+    expect(backToOrigin.phase).toBe("select_hometown");
+
+    const authed = {
+      ...atPreview,
+      phase: "discovery" as const,
+      isAuthenticated: true,
+      hasCompletedPersonalization: true,
+    };
+    expect(appFlowReducer(authed, { type: "EDIT_NEIGHBORHOOD" }).phase).toBe("discovery");
+    expect(appFlowReducer(authed, { type: "EDIT_ORIGIN" }).phase).toBe("discovery");
+    expect(
+      appFlowReducer(authed, {
+        type: "CONFIRM_NEIGHBORHOOD",
+        neighborhood: { label: "Stone Oak", fuzzedCenter: { lat: 29.65, lng: -98.48 } },
+      }).phase,
+    ).toBe("discovery");
+
+    // Authenticated user missing a neighborhood can still confirm it and advance
+    const authedMissingNeighborhood = {
+      ...INITIAL_APP_FLOW_STATE,
+      isAuthenticated: true,
+      selectedOrigin: AHMEDABAD,
+    };
+    const confirmed = appFlowReducer(authedMissingNeighborhood, {
+      type: "CONFIRM_NEIGHBORHOOD",
+      neighborhood: MEDICAL_CENTER,
+    });
+    expect(confirmed.confirmedNeighborhood).toEqual(MEDICAL_CENTER);
+    expect(confirmed.phase).toBe("personalize");
+  });
 });
 
 describe("persisted flow snapshot serialization and repair", () => {
