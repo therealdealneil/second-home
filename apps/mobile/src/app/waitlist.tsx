@@ -73,7 +73,7 @@ export default function MetroWaitlistSheet() {
         ) : (
           <View style={styles.form}>
             <Text style={styles.label}>Next Corridor City</Text>
-            <View style={styles.pillsRow}>
+            <View accessibilityRole="radiogroup" style={styles.pillsRow}>
               {WAITLIST_TARGET_METROS.map((option) => {
                 const selected = metro === option;
                 return (
@@ -100,6 +100,7 @@ export default function MetroWaitlistSheet() {
               <View style={styles.fieldGroup}>
                 <Text style={styles.label}>Your City</Text>
                 <TextInput
+                  accessibilityLabel="Your City"
                   style={styles.input}
                   value={customCity}
                   onChangeText={(txt) => {
@@ -116,6 +117,7 @@ export default function MetroWaitlistSheet() {
             <View style={styles.fieldGroup}>
               <Text style={styles.label}>Email or Mobile Number</Text>
               <TextInput
+                accessibilityLabel="Email or Mobile Number"
                 style={styles.input}
                 value={contact}
                 onChangeText={(txt) => {
@@ -127,18 +129,28 @@ export default function MetroWaitlistSheet() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
+                returnKeyType="done"
+                onSubmitEditing={handleSubmit}
               />
             </View>
 
             {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
-            <Pressable style={styles.primaryButton} onPress={handleSubmit}>
+            <Pressable
+              accessibilityRole="button"
+              style={styles.primaryButton}
+              onPress={handleSubmit}
+            >
               <Text style={styles.primaryButtonText}>Join Waitlist</Text>
             </Pressable>
           </View>
         )}
 
-        <Pressable style={styles.secondaryButton} onPress={() => dismissOrReturnHome(router)}>
+        <Pressable
+          accessibilityRole="button"
+          style={styles.secondaryButton}
+          onPress={() => dismissOrReturnHome(router)}
+        >
           <Text style={styles.secondaryButtonText}>Back to San Antonio Map</Text>
         </Pressable>
       </ScrollView>

@@ -73,7 +73,7 @@ export function PersonalizeCard({
         ) : null}
 
         <Text style={styles.sectionLabel}>Age Bracket</Text>
-        <View style={styles.pillsRow}>
+        <View accessibilityRole="radiogroup" style={styles.pillsRow}>
           {AGE_BRACKETS.map((value) => {
             const active = ageBracket === value;
             return (
@@ -96,7 +96,7 @@ export function PersonalizeCard({
         </View>
 
         <Text style={styles.sectionLabel}>Life Stage</Text>
-        <View style={styles.pillsRow}>
+        <View accessibilityRole="radiogroup" style={styles.pillsRow}>
           {LIFE_STAGES.map((value) => {
             const active = lifeStage === value;
             return (

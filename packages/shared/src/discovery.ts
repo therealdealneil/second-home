@@ -243,7 +243,7 @@ export const WaitlistSubmissionSchema = z
     contact: z
       .string()
       .trim()
-      .min(1, "Enter an email address or 10-digit phone number.")
+      .min(1, "Enter an email address or 10-15 digit phone number.")
       .max(120, "Contact info is too long.")
       .refine(isValidWaitlistContact, {
         message: "Enter a valid email address or 10-15 digit phone number.",
