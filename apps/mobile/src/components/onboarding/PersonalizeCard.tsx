@@ -79,6 +79,8 @@ export function PersonalizeCard({
             return (
               <Pressable
                 key={value}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: active }}
                 style={[styles.pill, active && styles.pillActive]}
                 onPress={() => {
                   void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -100,6 +102,8 @@ export function PersonalizeCard({
             return (
               <Pressable
                 key={value}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: active }}
                 style={[styles.pill, active && styles.pillActive]}
                 onPress={() => {
                   void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -121,6 +125,8 @@ export function PersonalizeCard({
             return (
               <Pressable
                 key={value}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: active }}
                 style={[styles.pill, active && styles.pillActive]}
                 onPress={() => toggleInterest(value)}
               >

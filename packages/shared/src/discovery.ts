@@ -216,3 +216,68 @@ export function evaluateDiscoveryMatches(params: {
   matched.sort((a, b) => a.distanceMeters - b.distanceMeters);
   return matched.slice(0, MAX_MATCH_RESULTS);
 }
+
+export const WAITLIST_TARGET_METROS = [
+  "Austin, TX",
+  "Dallas-Fort Worth, TX",
+  "Houston, TX",
+  "Other",
+] as const;
+export const WaitlistMetroSchema = z.enum(WAITLIST_TARGET_METROS);
+export type WaitlistMetro = z.infer<typeof WaitlistMetroSchema>;
+
+const WaitlistEmailSchema = z.string().email();
+
+function isValidWaitlistContact(value: string): boolean {
+  if (WaitlistEmailSchema.safeParse(value).success) {
+    return true;
+  }
+  const digits = value.replace(/\D/g, "");
+  return /^[0-9+\-().\s]+$/.test(value) && digits.length >= 10 && digits.length <= 15;
+}
+
+export const WaitlistSubmissionSchema = z
+  .object({
+    metro: WaitlistMetroSchema,
+    customCity: z.string().trim().max(80).optional(),
+    contact: z
+      .string()
+      .trim()
+      .min(1, "Enter an email address or 10-digit phone number.")
+      .max(120, "Contact info is too long.")
+      .refine(isValidWaitlistContact, {
+        message: "Enter a valid email address or 10-15 digit phone number.",
+      }),
+  })
+  .superRefine((data, ctx) => {
+    if (data.metro === "Other" && (!data.customCity || data.customCity.length < 2)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["customCity"],
+        message: "Enter your city name.",
+      });
+    }
+  });
+export type WaitlistSubmission = z.infer<typeof WaitlistSubmissionSchema>;
+
+export function validateWaitlistSubmission(
+  raw: unknown,
+):
+  { ok: true; data: WaitlistSubmission & { resolvedCity: string } } | { ok: false; error: string } {
+  const parsed = WaitlistSubmissionSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Please check your waitlist details.",
+    };
+  }
+  const resolvedCity =
+    parsed.data.metro === "Other" ? (parsed.data.customCity ?? "your city") : parsed.data.metro;
+  return {
+    ok: true,
+    data: {
+      ...parsed.data,
+      resolvedCity,
+    },
+  };
+}
