@@ -134,7 +134,11 @@ export default function MetroWaitlistSheet() {
               />
             </View>
 
-            {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+            {errorMessage ? (
+              <Text style={styles.errorText} accessibilityLiveRegion="polite">
+                {errorMessage}
+              </Text>
+            ) : null}
 
             <Pressable
               accessibilityRole="button"
