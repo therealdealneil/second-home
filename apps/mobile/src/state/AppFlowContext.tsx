@@ -10,6 +10,7 @@ import {
   type DiscoveryFilters,
   type PendingAuthIntent,
   type PersonalizationDraft,
+  type ReportReasonCode,
 } from "@second-home/shared";
 import { useRouter } from "expo-router";
 import {
@@ -35,6 +36,16 @@ type AppFlowContextValue = {
   completeMockAuth: () => void;
   completePersonalization: (draft?: PersonalizationDraft) => void;
   updateFilters: (filters: Partial<DiscoveryFilters>) => void;
+  toggleGhostMode: (enabled?: boolean) => void;
+  sendConnectionRequest: (params: {
+    userId: string;
+    householdId: string;
+    icebreakerText: string;
+  }) => void;
+  acceptMockConnection: (userId: string) => void;
+  vouchMember: (userId: string) => void;
+  blockHousehold: (params: { householdId: string; memberUserIds: readonly string[] }) => void;
+  reportMember: (userId: string, reasonCode: ReportReasonCode) => void;
   resetPrototypeFlow: () => void;
 };
 
@@ -142,6 +153,60 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
     [trackedDispatch],
   );
 
+  const toggleGhostMode = useCallback(
+    (enabled?: boolean) => {
+      trackedDispatch({ type: "TOGGLE_GHOST_MODE", enabled });
+    },
+    [trackedDispatch],
+  );
+
+  const sendConnectionRequest = useCallback(
+    (params: { userId: string; householdId: string; icebreakerText: string }) => {
+      trackedDispatch({
+        type: "SEND_CONNECTION_REQUEST",
+        ...params,
+        timestamp: new Date().toISOString(),
+      });
+    },
+    [trackedDispatch],
+  );
+
+  const acceptMockConnection = useCallback(
+    (userId: string) => {
+      trackedDispatch({
+        type: "ACCEPT_MOCK_CONNECTION",
+        userId,
+        timestamp: new Date().toISOString(),
+      });
+    },
+    [trackedDispatch],
+  );
+
+  const vouchMember = useCallback(
+    (userId: string) => {
+      trackedDispatch({ type: "VOUCH_MEMBER", userId });
+    },
+    [trackedDispatch],
+  );
+
+  const blockHousehold = useCallback(
+    (params: { householdId: string; memberUserIds: readonly string[] }) => {
+      trackedDispatch({
+        type: "BLOCK_HOUSEHOLD",
+        ...params,
+        timestamp: new Date().toISOString(),
+      });
+    },
+    [trackedDispatch],
+  );
+
+  const reportMember = useCallback(
+    (userId: string, reasonCode: ReportReasonCode) => {
+      trackedDispatch({ type: "REPORT_MEMBER", userId, reasonCode });
+    },
+    [trackedDispatch],
+  );
+
   const resetPrototypeFlow = useCallback(() => {
     setCanPersist(true);
     trackedDispatch({ type: "RESET_FLOW" });
@@ -158,6 +223,12 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
       completeMockAuth,
       completePersonalization,
       updateFilters,
+      toggleGhostMode,
+      sendConnectionRequest,
+      acceptMockConnection,
+      vouchMember,
+      blockHousehold,
+      reportMember,
       resetPrototypeFlow,
     }),
     [
@@ -169,6 +240,12 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
       completeMockAuth,
       completePersonalization,
       updateFilters,
+      toggleGhostMode,
+      sendConnectionRequest,
+      acceptMockConnection,
+      vouchMember,
+      blockHousehold,
+      reportMember,
       resetPrototypeFlow,
     ],
   );

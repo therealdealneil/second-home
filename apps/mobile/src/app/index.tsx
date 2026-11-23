@@ -1,10 +1,13 @@
 import {
+  DEFAULT_DISCOVERY_FILTERS,
   PRIVACY_RING_DISPLAY_RADIUS_MILES,
   SAN_ANTONIO_DEFAULT_CENTER,
   SAN_ANTONIO_DEFAULT_ZOOM,
   evaluateBlurredPreviewMatches,
+  evaluateDiscoveryMatches,
   parseOriginDeepLinkParam,
   type ConfirmedNeighborhood,
+  type DiscoveryRadiusMiles,
   type GujaratLocation,
 } from "@second-home/shared";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
@@ -12,14 +15,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { KeyboardAvoidingView, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MapCanvas, type MapCameraTarget, type MapSyncCamera } from "@/components/MapCanvas";
+import { DiscoveryBottomTray, DiscoveryTopControls } from "@/components/discovery/DiscoveryHud";
 import { BlurredPreviewCard } from "@/components/onboarding/BlurredPreviewCard";
 import { GujaratAutocompleteCard } from "@/components/onboarding/GujaratAutocompleteCard";
 import { NeighborhoodConfirmCard } from "@/components/onboarding/NeighborhoodConfirmCard";
+import { PersonalizeCard } from "@/components/onboarding/PersonalizeCard";
 import { MOCK_SAN_ANTONIO_HOUSEHOLDS } from "@/data/mockHouseholds";
 import { useSanAntonioLocation } from "@/hooks/useSanAntonioLocation";
 import { useAppFlow } from "@/state/AppFlowContext";
 
-const SAMPLE_MOCK_HOUSEHOLD_ID = "20000000-0000-4000-8000-000000000001";
+const DISCOVERY_ZOOM_BY_RADIUS: Record<DiscoveryRadiusMiles, number> = {
+  2: 12.6,
+  5: 11.7,
+  10: 11.0,
+  25: 9.8,
+};
 
 export default function MapHomeScreen() {
   const router = useRouter();
@@ -31,6 +41,8 @@ export default function MapHomeScreen() {
     confirmNeighborhood,
     openAuthForIntent,
     completePersonalization,
+    updateFilters,
+    toggleGhostMode,
     resetPrototypeFlow,
   } = useAppFlow();
 
@@ -106,6 +118,25 @@ export default function MapHomeScreen() {
     });
   }, [state.confirmedNeighborhood, state.selectedOrigin]);
 
+  const discoveryMatches = useMemo(() => {
+    if (state.phase !== "discovery" || !state.confirmedNeighborhood) {
+      return [];
+    }
+    return evaluateDiscoveryMatches({
+      households: MOCK_SAN_ANTONIO_HOUSEHOLDS,
+      neighborhoodCenter: state.confirmedNeighborhood.fuzzedCenter,
+      selectedOrigin: state.selectedOrigin,
+      filters: state.filters,
+      blockedHouseholdIds: new Set(state.blockedHouseholdIds),
+    });
+  }, [
+    state.blockedHouseholdIds,
+    state.confirmedNeighborhood,
+    state.filters,
+    state.phase,
+    state.selectedOrigin,
+  ]);
+
   const syncCamera = useMemo<MapSyncCamera | null>(() => {
     if (!isHydrated || !state.confirmedNeighborhood) {
       return null;
@@ -117,11 +148,15 @@ export default function MapHomeScreen() {
         key: `select_hometown:${state.confirmedNeighborhood.fuzzedCenter.lat}:${state.confirmedNeighborhood.fuzzedCenter.lng}`,
       };
     }
-    if (
-      state.phase === "blurred_preview" ||
-      state.phase === "personalize" ||
-      state.phase === "discovery"
-    ) {
+    if (state.phase === "discovery") {
+      const discoveryZoom = DISCOVERY_ZOOM_BY_RADIUS[state.filters.radiusMiles];
+      return {
+        center: state.confirmedNeighborhood.fuzzedCenter,
+        zoomLevel: discoveryZoom,
+        key: `discovery:${state.filters.radiusMiles}:${state.confirmedNeighborhood.fuzzedCenter.lat}:${state.confirmedNeighborhood.fuzzedCenter.lng}`,
+      };
+    }
+    if (state.phase === "blurred_preview" || state.phase === "personalize") {
       const zoom = blurredPreview?.recommendedZoom ?? 11.1;
       return {
         center: state.confirmedNeighborhood.fuzzedCenter,
@@ -138,6 +173,7 @@ export default function MapHomeScreen() {
     blurredPreview?.recommendedZoom,
     isHydrated,
     state.confirmedNeighborhood,
+    state.filters.radiusMiles,
     state.phase,
     state.selectedOrigin?.id,
   ]);
@@ -191,6 +227,7 @@ export default function MapHomeScreen() {
   }, [dispatch, moveCamera, state.confirmedNeighborhood]);
 
   const handleReset = useCallback(() => {
+    lastOriginParamRef.current = null;
     location.resetLocationCapture();
     resetPrototypeFlow();
     moveCamera(SAN_ANTONIO_DEFAULT_CENTER, SAN_ANTONIO_DEFAULT_ZOOM);
@@ -206,7 +243,9 @@ export default function MapHomeScreen() {
         : null;
     }
     if (
-      (state.phase === "select_hometown" || state.phase === "blurred_preview") &&
+      (state.phase === "select_hometown" ||
+        state.phase === "blurred_preview" ||
+        (state.phase === "discovery" && !state.isGhostMode)) &&
       state.confirmedNeighborhood
     ) {
       return {
@@ -215,7 +254,7 @@ export default function MapHomeScreen() {
       };
     }
     return null;
-  }, [location.candidate, state.confirmedNeighborhood, state.phase]);
+  }, [location.candidate, state.confirmedNeighborhood, state.isGhostMode, state.phase]);
 
   const activeBlurredPins = useMemo(
     () => (state.phase === "blurred_preview" && blurredPreview ? blurredPreview.households : []),
@@ -229,6 +268,13 @@ export default function MapHomeScreen() {
     [openAuthForIntent],
   );
 
+  const handlePressDiscoveryPin = useCallback(
+    (householdId: string) => {
+      router.push({ pathname: "/household/[id]", params: { id: householdId } });
+    },
+    [router],
+  );
+
   return (
     <View style={styles.container}>
       <MapCanvas
@@ -237,6 +283,8 @@ export default function MapHomeScreen() {
         privacyRing={privacyRing}
         blurredPins={activeBlurredPins}
         onPressBlurredPin={handlePressBlurredPin}
+        discoveryPins={discoveryMatches}
+        onPressDiscoveryPin={handlePressDiscoveryPin}
         interactiveDragAdjust={
           state.phase === "confirm_neighborhood" && location.status === "snapped"
         }
@@ -253,6 +301,22 @@ export default function MapHomeScreen() {
                 : "Gujarat → San Antonio"}
             </Text>
           </View>
+
+          {state.phase === "discovery" ? (
+            <DiscoveryTopControls
+              filters={state.filters}
+              selectedOrigin={state.selectedOrigin}
+              isGhostMode={state.isGhostMode}
+              onToggleOriginMode={() =>
+                updateFilters({
+                  originMode:
+                    state.filters.originMode === "exact_town" ? "all_gujarat" : "exact_town",
+                })
+              }
+              onOpenFilters={() => router.push("/filters")}
+              onToggleGhostMode={() => toggleGhostMode()}
+            />
+          ) : null}
 
           {state.selectedOrigin && state.phase === "confirm_neighborhood" ? (
             <View style={styles.chip}>
@@ -309,43 +373,22 @@ export default function MapHomeScreen() {
           ) : null}
 
           {state.phase === "personalize" ? (
-            <View style={styles.bottomCard}>
-              <Text style={styles.cardTitle}>3-Second Personalization</Text>
-              <Text style={styles.cardBody}>
-                Age Bracket, Life Stage & Interest pills land next in Flow B Step 5.
-              </Text>
-              <View style={styles.actionsRow}>
-                <Pressable style={styles.primaryButton} onPress={() => completePersonalization()}>
-                  <Text style={styles.primaryButtonText}>Continue to Discovery</Text>
-                </Pressable>
-              </View>
-            </View>
+            <PersonalizeCard
+              initialDraft={state.personalization}
+              pendingInviteCode={state.pendingInviteCode}
+              onComplete={completePersonalization}
+            />
           ) : null}
 
           {state.phase === "discovery" ? (
-            <View style={styles.bottomCard}>
-              <Text style={styles.cardTitle}>Discovery Map Active</Text>
-              <Text style={styles.cardBody}>
-                Filters: {state.filters.originMode === "exact_town" ? "Exact Town" : "All Gujarat"}{" "}
-                · {state.filters.radiusMiles} mi
-              </Text>
-              <View style={styles.actionsRow}>
-                <Pressable
-                  style={styles.primaryButton}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/household/[id]",
-                      params: { id: SAMPLE_MOCK_HOUSEHOLD_ID },
-                    })
-                  }
-                >
-                  <Text style={styles.primaryButtonText}>Open Household Sheet</Text>
-                </Pressable>
-                <Pressable style={styles.secondaryButton} onPress={() => router.push("/filters")}>
-                  <Text style={styles.secondaryButtonText}>Filters</Text>
-                </Pressable>
-              </View>
-            </View>
+            <DiscoveryBottomTray
+              households={discoveryMatches}
+              neighborhoodLabel={state.confirmedNeighborhood?.label ?? "San Antonio"}
+              isGhostMode={state.isGhostMode}
+              onSelectHousehold={handlePressDiscoveryPin}
+              onShowAllGujarat={() => updateFilters({ originMode: "all_gujarat", radiusMiles: 25 })}
+              onResetFilters={() => updateFilters(DEFAULT_DISCOVERY_FILTERS)}
+            />
           ) : null}
 
           {state.phase !== "confirm_neighborhood" || location.status === "snapped" ? (
@@ -422,57 +465,6 @@ const styles = StyleSheet.create({
   },
   bottomStack: {
     gap: 8,
-  },
-  bottomCard: {
-    backgroundColor: "rgba(255, 255, 255, 0.96)",
-    borderRadius: 20,
-    padding: 18,
-    gap: 10,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
-  },
-  cardTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#0F172A",
-  },
-  cardBody: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: "#475569",
-  },
-  actionsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginTop: 4,
-  },
-  primaryButton: {
-    backgroundColor: "#0F766E",
-    paddingHorizontal: 16,
-    paddingVertical: 11,
-    borderRadius: 12,
-  },
-  primaryButtonText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  secondaryButton: {
-    backgroundColor: "#F1F5F9",
-    paddingHorizontal: 16,
-    paddingVertical: 11,
-    borderRadius: 12,
-  },
-  secondaryButtonText: {
-    color: "#0F172A",
-    fontSize: 14,
-    fontWeight: "600",
   },
   resetPill: {
     alignSelf: "center",
