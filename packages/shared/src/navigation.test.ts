@@ -66,6 +66,12 @@ describe("canonical deep-link URL builders", () => {
     expect(() => buildOriginDeepLinkUrl("not-a-place")).toThrow();
     expect(() => buildOriginDeepLinkUrl("surat-vesu", "javascript:alert(1)")).toThrow();
     expect(() => buildOriginDeepLinkUrl("surat-vesu", "not a url")).toThrow();
+    expect(() =>
+      buildOriginDeepLinkUrl("surat-vesu", "https://preview.secondhome.app/?campaign=qr"),
+    ).toThrow();
+    expect(() =>
+      buildOriginDeepLinkUrl("surat-vesu", "https://preview.secondhome.app/#section"),
+    ).toThrow();
   });
 
   it("builds Flow B household invite URLs", () => {
@@ -74,6 +80,9 @@ describe("canonical deep-link URL builders", () => {
     );
     expect(() => buildHouseholdInviteUrl("bad code!")).toThrow();
     expect(() => buildHouseholdInviteUrl("mockinv0001", "ftp://secondhome.app")).toThrow();
+    expect(() =>
+      buildHouseholdInviteUrl("mockinv0001", "https://secondhome.app/?foo=bar"),
+    ).toThrow();
   });
 });
 

@@ -72,7 +72,7 @@ function resolveValidatedPhase(
       ? "blurred_preview"
       : requestedPhase;
   }
-  if (requestedPhase === "discovery" || prereqs.hasCompletedPersonalization) {
+  if (prereqs.hasCompletedPersonalization) {
     return "discovery";
   }
   return "personalize";

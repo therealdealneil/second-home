@@ -129,6 +129,9 @@ const BaseOriginUrlSchema = z
   .url()
   .refine((url) => url.startsWith("https://") || url.startsWith("http://"), {
     message: "Base URL must use http:// or https://",
+  })
+  .refine((url) => !url.includes("?") && !url.includes("#"), {
+    message: "Base URL must not include query strings or fragments",
   });
 
 function extractFirstParam(raw: unknown): string | null {

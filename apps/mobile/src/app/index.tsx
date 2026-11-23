@@ -39,12 +39,16 @@ export default function MapHomeScreen() {
       return;
     }
     const rawOrigin = Array.isArray(params.origin_id) ? params.origin_id[0] : params.origin_id;
-    if (!rawOrigin || rawOrigin === lastOriginParamRef.current) {
+    if (!rawOrigin) {
+      lastOriginParamRef.current = null;
+      return;
+    }
+    if (rawOrigin === lastOriginParamRef.current) {
       return;
     }
     const resolved = parseOriginDeepLinkParam(rawOrigin);
+    lastOriginParamRef.current = resolved ? rawOrigin : null;
     if (resolved) {
-      lastOriginParamRef.current = rawOrigin;
       dispatch({ type: "APPLY_ORIGIN_DEEP_LINK", origin: resolved });
     }
   }, [dispatch, isHydrated, params.origin_id]);

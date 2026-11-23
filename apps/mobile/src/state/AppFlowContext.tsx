@@ -44,6 +44,7 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [state, dispatch] = useReducer(appFlowReducer, INITIAL_APP_FLOW_STATE);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [canPersist, setCanPersist] = useState(false);
   const userMutatedBeforeHydrationRef = useRef(false);
 
   useEffect(() => {
@@ -52,7 +53,11 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
     async function hydrate() {
       try {
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        if (cancelled || userMutatedBeforeHydrationRef.current) {
+        if (cancelled) {
+          return;
+        }
+        if (userMutatedBeforeHydrationRef.current) {
+          setCanPersist(true);
           return;
         }
         if (raw) {
@@ -63,8 +68,9 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
             await AsyncStorage.removeItem(STORAGE_KEY);
           }
         }
+        setCanPersist(true);
       } catch {
-        // Non-blocking hydration: ignore storage errors so map stays responsive
+        // Non-blocking hydration: keep map responsive without overwriting unread storage
       } finally {
         if (!cancelled) {
           setIsHydrated(true);
@@ -95,13 +101,13 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    if (!isHydrated) {
+    if (!isHydrated || !canPersist) {
       return;
     }
     void AsyncStorage.setItem(STORAGE_KEY, serializeFlowSnapshot(state)).catch(() => {
       // Ignore persistence failures in prototype mode
     });
-  }, [isHydrated, state]);
+  }, [canPersist, isHydrated, state]);
 
   const confirmNeighborhood = useCallback(
     (neighborhood: ConfirmedNeighborhood) => {
@@ -137,6 +143,7 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
   );
 
   const resetPrototypeFlow = useCallback(() => {
+    setCanPersist(true);
     trackedDispatch({ type: "RESET_FLOW" });
     void AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
   }, [trackedDispatch]);

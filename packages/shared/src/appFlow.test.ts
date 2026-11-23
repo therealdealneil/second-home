@@ -135,6 +135,16 @@ describe("persisted flow snapshot serialization and repair", () => {
     const restored = parsePersistedFlowSnapshot(badSnapshot);
     expect(restored?.phase).toBe("blurred_preview");
 
+    const discoveryWithoutPersonalization = serializeFlowSnapshot({
+      ...INITIAL_APP_FLOW_STATE,
+      phase: "discovery",
+      confirmedNeighborhood: MEDICAL_CENTER,
+      selectedOrigin: AHMEDABAD,
+      isAuthenticated: true,
+      hasCompletedPersonalization: false,
+    });
+    expect(parsePersistedFlowSnapshot(discoveryWithoutPersonalization)?.phase).toBe("personalize");
+
     const missingNeighborhood = serializeFlowSnapshot({
       ...INITIAL_APP_FLOW_STATE,
       phase: "discovery",
