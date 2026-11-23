@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { AgeBracketSchema, LifeStageSchema, type AgeBracket, type LifeStage } from "./enums";
+import {
+  AgeBracketSchema,
+  ConnectionRecordSchema,
+  EntityIdSchema,
+  LifeStageSchema,
+  type AgeBracket,
+  type LifeStage,
+} from "./enums";
 import { getGujaratLocationById, type GujaratLocation } from "./locations";
 
 export const DEFAULT_APP_ORIGIN = "https://secondhome.app";
@@ -78,13 +85,7 @@ export const InviteCodeSchema = z
     "Invite code must be 6-32 alphanumeric, hyphen, or underscore characters",
   );
 
-export const HouseholdIdSchema = z
-  .string()
-  .trim()
-  .regex(
-    /^[a-zA-Z0-9_-]{1,64}$/,
-    "Household ID must be 1-64 alphanumeric, hyphen, or underscore characters",
-  );
+export const HouseholdIdSchema = EntityIdSchema;
 
 /**
  * Only non-sensitive fuzzed display neighborhood metadata may be stored in client state.
@@ -119,6 +120,11 @@ export const PersistedFlowSnapshotSchema = z.object({
   hasCompletedPersonalization: z.boolean(),
   personalization: PersonalizationDraftSchema,
   filters: DiscoveryFiltersSchema,
+  isGhostMode: z.boolean().default(false),
+  blockedHouseholdIds: z.array(HouseholdIdSchema).default([]),
+  vouchedUserIds: z.array(EntityIdSchema).default([]),
+  reportedUserIds: z.array(EntityIdSchema).default([]),
+  connectionsByUserId: z.record(EntityIdSchema, ConnectionRecordSchema).optional(),
 });
 export type PersistedFlowSnapshot = z.infer<typeof PersistedFlowSnapshotSchema>;
 

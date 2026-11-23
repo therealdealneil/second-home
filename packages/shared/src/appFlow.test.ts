@@ -4,6 +4,7 @@ import {
   appFlowReducer,
   parsePersistedFlowSnapshot,
   serializeFlowSnapshot,
+  type AppFlowState,
 } from "./appFlow";
 import { getGujaratLocationById } from "./locations";
 
@@ -228,5 +229,199 @@ describe("persisted flow snapshot serialization and repair", () => {
     expect(hydrated.pendingInviteCode).toBe("mockinv0001");
     expect(hydrated.phase).toBe("blurred_preview");
     expect(hydrated.confirmedNeighborhood).toEqual(MEDICAL_CENTER);
+  });
+});
+
+describe("Flow C social actions, safety blocks, and Ghost Mode", () => {
+  it("validates icebreakers, accepts connections, supports peer vouching, and blocks cleanly", () => {
+    let state: AppFlowState = {
+      ...INITIAL_APP_FLOW_STATE,
+      phase: "discovery",
+      confirmedNeighborhood: MEDICAL_CENTER,
+      selectedOrigin: AHMEDABAD,
+      isAuthenticated: true,
+      hasCompletedPersonalization: true,
+    };
+
+    // Invalid icebreaker with URL is ignored
+    const rejected = appFlowReducer(state, {
+      type: "SEND_CONNECTION_REQUEST",
+      userId: "u-rohan",
+      householdId: "hh-patel",
+      icebreakerText: "Join https://spam.test",
+    });
+    expect(rejected.connectionsByUserId["u-rohan"]).toBeUndefined();
+
+    // Valid icebreaker -> pending -> accept -> vouch
+    state = appFlowReducer(state, {
+      type: "SEND_CONNECTION_REQUEST",
+      userId: "u-rohan",
+      householdId: "hh-patel",
+      icebreakerText: "Kem cho Rohan! Would love to connect.",
+      timestamp: "2026-11-22T20:00:00.000Z",
+    });
+    expect(state.connectionsByUserId["u-rohan"]?.status).toBe("pending");
+
+    // Cannot vouch before mutual acceptance
+    expect(
+      appFlowReducer(state, { type: "VOUCH_MEMBER", userId: "u-rohan" }).vouchedUserIds,
+    ).toEqual([]);
+
+    state = appFlowReducer(state, {
+      type: "ACCEPT_MOCK_CONNECTION",
+      userId: "u-rohan",
+      timestamp: "2026-11-22T20:05:00.000Z",
+    });
+    expect(state.connectionsByUserId["u-rohan"]?.status).toBe("accepted");
+
+    state = appFlowReducer(state, { type: "VOUCH_MEMBER", userId: "u-rohan" });
+    state = appFlowReducer(state, { type: "VOUCH_MEMBER", userId: "u-rohan" });
+    expect(state.vouchedUserIds).toEqual(["u-rohan"]);
+
+    // Blocking household revokes connection and records household ID
+    state = appFlowReducer(state, {
+      type: "BLOCK_HOUSEHOLD",
+      householdId: "hh-patel",
+      memberUserIds: ["u-rohan", "u-priya"],
+      timestamp: "2026-11-22T20:10:00.000Z",
+    });
+    expect(state.blockedHouseholdIds).toEqual(["hh-patel"]);
+    expect(state.connectionsByUserId["u-rohan"]?.status).toBe("blocked");
+    expect(state.connectionsByUserId["u-priya"]?.status).toBe("blocked");
+
+    // Ghost Mode & Report
+    state = appFlowReducer(state, { type: "TOGGLE_GHOST_MODE" });
+    expect(state.isGhostMode).toBe(true);
+    state = appFlowReducer(state, {
+      type: "REPORT_MEMBER",
+      userId: "u-rohan",
+      reasonCode: "spam",
+    });
+    expect(state.reportedUserIds).toEqual(["u-rohan"]);
+  });
+
+  it("blocks duplicate SEND_CONNECTION_REQUEST over pending, accepted, or blocked states", () => {
+    const authedState: AppFlowState = {
+      ...INITIAL_APP_FLOW_STATE,
+      phase: "discovery",
+      confirmedNeighborhood: MEDICAL_CENTER,
+      selectedOrigin: AHMEDABAD,
+      isAuthenticated: true,
+      hasCompletedPersonalization: true,
+    };
+
+    // Unauthenticated requests are ignored
+    expect(
+      appFlowReducer(INITIAL_APP_FLOW_STATE, {
+        type: "SEND_CONNECTION_REQUEST",
+        userId: "u-test",
+        householdId: "hh-test",
+        icebreakerText: "Kem cho neighbor!",
+      }).connectionsByUserId["u-test"],
+    ).toBeUndefined();
+    expect(
+      appFlowReducer(INITIAL_APP_FLOW_STATE, {
+        type: "VOUCH_MEMBER",
+        userId: "10000000-0000-4000-8000-000000000003",
+      }).vouchedUserIds,
+    ).toEqual([]);
+
+    // Cannot overwrite existing pending connection
+    const pendingState = appFlowReducer(authedState, {
+      type: "SEND_CONNECTION_REQUEST",
+      userId: "u-rohan",
+      householdId: "hh-patel",
+      icebreakerText: "First greeting!",
+      timestamp: "2026-11-22T20:00:00.000Z",
+    });
+    const duplicatePending = appFlowReducer(pendingState, {
+      type: "SEND_CONNECTION_REQUEST",
+      userId: "u-rohan",
+      householdId: "hh-patel",
+      icebreakerText: "Second overwrite attempt!",
+      timestamp: "2026-11-22T20:05:00.000Z",
+    });
+    expect(duplicatePending.connectionsByUserId["u-rohan"]?.icebreakerText).toBe("First greeting!");
+
+    // Blocked households reject new requests and vouches
+    const blockedState = appFlowReducer(authedState, {
+      type: "BLOCK_HOUSEHOLD",
+      householdId: "hh-patel",
+      memberUserIds: ["u-priya"],
+    });
+    expect(
+      appFlowReducer(blockedState, {
+        type: "SEND_CONNECTION_REQUEST",
+        userId: "u-priya",
+        householdId: "hh-patel",
+        icebreakerText: "Should not send",
+      }).connectionsByUserId["u-priya"]?.status,
+    ).toBe("blocked");
+  });
+
+  it("round-trips Flow C snapshot state and preserves seeded connections for legacy Step 2.1 snapshots", () => {
+    let state: AppFlowState = {
+      ...INITIAL_APP_FLOW_STATE,
+      phase: "discovery",
+      confirmedNeighborhood: MEDICAL_CENTER,
+      selectedOrigin: AHMEDABAD,
+      isAuthenticated: true,
+      hasCompletedPersonalization: true,
+    };
+    state = appFlowReducer(state, { type: "TOGGLE_GHOST_MODE", enabled: true });
+    state = appFlowReducer(state, {
+      type: "SEND_CONNECTION_REQUEST",
+      userId: "u-rohan",
+      householdId: "hh-patel",
+      icebreakerText: "Kem cho Rohan!",
+      timestamp: "2026-11-22T21:00:00.000Z",
+    });
+    state = appFlowReducer(state, {
+      type: "VOUCH_MEMBER",
+      userId: "10000000-0000-4000-8000-000000000003",
+    });
+    state = appFlowReducer(state, {
+      type: "BLOCK_HOUSEHOLD",
+      householdId: "hh-blocked",
+      memberUserIds: ["u-blocked"],
+    });
+
+    const serialized = serializeFlowSnapshot(state);
+    const parsed = parsePersistedFlowSnapshot(serialized);
+    expect(parsed).not.toBeNull();
+    const rehydrated = appFlowReducer(INITIAL_APP_FLOW_STATE, {
+      type: "HYDRATE_STATE",
+      payload: parsed!,
+    });
+    expect(rehydrated.isGhostMode).toBe(true);
+    expect(rehydrated.vouchedUserIds).toEqual(["10000000-0000-4000-8000-000000000003"]);
+    expect(rehydrated.blockedHouseholdIds).toEqual(["hh-blocked"]);
+    expect(rehydrated.connectionsByUserId["u-rohan"]?.status).toBe("pending");
+    expect(rehydrated.connectionsByUserId["u-blocked"]?.status).toBe("blocked");
+
+    // Pre-Step-2.2 snapshot missing Flow C keys should retain INITIAL_APP_FLOW_STATE seeded connection
+    const legacySnapshot = JSON.stringify({
+      phase: "discovery",
+      confirmedNeighborhood: MEDICAL_CENTER,
+      selectedOriginId: AHMEDABAD.id,
+      pendingInviteCode: null,
+      isAuthenticated: true,
+      hasCompletedPersonalization: true,
+      personalization: { ageBracket: "30s", lifeStage: "couple", interests: ["Cricket"] },
+      filters: { originMode: "exact_town", radiusMiles: 10, ageBrackets: [], lifeStages: [] },
+    });
+    const parsedLegacy = parsePersistedFlowSnapshot(legacySnapshot);
+    expect(parsedLegacy?.connectionsByUserId).toBeUndefined();
+    const hydratedLegacy = appFlowReducer(INITIAL_APP_FLOW_STATE, {
+      type: "HYDRATE_STATE",
+      payload: parsedLegacy!,
+    });
+    expect(hydratedLegacy.connectionsByUserId["10000000-0000-4000-8000-000000000003"]?.status).toBe(
+      "accepted",
+    );
+
+    // RESET_FLOW restores INITIAL_APP_FLOW_STATE cleanly
+    const resetState = appFlowReducer(rehydrated, { type: "RESET_FLOW" });
+    expect(resetState).toEqual(INITIAL_APP_FLOW_STATE);
   });
 });

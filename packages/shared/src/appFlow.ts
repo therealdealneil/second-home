@@ -1,3 +1,5 @@
+import { validateIcebreaker, type ReportReasonCode } from "./discovery";
+import type { ConnectionRecord } from "./enums";
 import { getGujaratLocationById, type GujaratLocation } from "./locations";
 import {
   DEFAULT_DISCOVERY_FILTERS,
@@ -22,6 +24,22 @@ export type AppFlowState = {
   hasCompletedPersonalization: boolean;
   personalization: PersonalizationDraft;
   filters: DiscoveryFilters;
+  isGhostMode: boolean;
+  blockedHouseholdIds: string[];
+  vouchedUserIds: string[];
+  reportedUserIds: string[];
+  connectionsByUserId: Record<string, ConnectionRecord>;
+};
+
+// Pre-seed 1 mutually accepted mock connection (Kunal from Shah Household)
+// matching supabase/seed/san_antonio_mock_households.sql so reviewers can test
+// WhatsApp handoff and peer vouching immediately in Flow C.
+const SEEDED_CONNECTIONS: Record<string, ConnectionRecord> = {
+  "10000000-0000-4000-8000-000000000003": {
+    status: "accepted",
+    icebreakerText: "Kem cho! Saw you are also from Ahmedabad and near Medical Center.",
+    updatedAt: "2026-11-20T12:00:00.000Z",
+  },
 };
 
 export const INITIAL_APP_FLOW_STATE: AppFlowState = {
@@ -38,6 +56,11 @@ export const INITIAL_APP_FLOW_STATE: AppFlowState = {
     interests: [],
   },
   filters: DEFAULT_DISCOVERY_FILTERS,
+  isGhostMode: false,
+  blockedHouseholdIds: [],
+  vouchedUserIds: [],
+  reportedUserIds: [],
+  connectionsByUserId: SEEDED_CONNECTIONS,
 };
 
 export type AppFlowAction =
@@ -54,6 +77,23 @@ export type AppFlowAction =
   | { type: "COMPLETE_PERSONALIZATION"; personalization?: PersonalizationDraft }
   | { type: "CLEAR_PENDING_INTENT" }
   | { type: "UPDATE_FILTERS"; filters: Partial<DiscoveryFilters> }
+  | { type: "TOGGLE_GHOST_MODE"; enabled?: boolean }
+  | {
+      type: "SEND_CONNECTION_REQUEST";
+      userId: string;
+      householdId: string;
+      icebreakerText: string;
+      timestamp?: string;
+    }
+  | { type: "ACCEPT_MOCK_CONNECTION"; userId: string; timestamp?: string }
+  | { type: "VOUCH_MEMBER"; userId: string }
+  | {
+      type: "BLOCK_HOUSEHOLD";
+      householdId: string;
+      memberUserIds: readonly string[];
+      timestamp?: string;
+    }
+  | { type: "REPORT_MEMBER"; userId: string; reasonCode: ReportReasonCode }
   | { type: "RESET_FLOW" };
 
 function resolveValidatedPhase(
@@ -130,8 +170,6 @@ export function appFlowReducer(state: AppFlowState, action: AppFlowAction): AppF
       if (state.isAuthenticated && state.confirmedNeighborhood !== null) {
         return state;
       }
-      // Never skip San Antonio GPS confirmation, even with ?origin_id deep link;
-      // resolve next phase from remaining prerequisites.
       const nextPhase = resolveValidatedPhase(
         state.selectedOrigin ? "blurred_preview" : "select_hometown",
         {
@@ -236,6 +274,103 @@ export function appFlowReducer(state: AppFlowState, action: AppFlowAction): AppF
       };
     }
 
+    case "TOGGLE_GHOST_MODE": {
+      return {
+        ...state,
+        isGhostMode: action.enabled ?? !state.isGhostMode,
+      };
+    }
+
+    case "SEND_CONNECTION_REQUEST": {
+      if (!state.isAuthenticated || state.blockedHouseholdIds.includes(action.householdId)) {
+        return state;
+      }
+      const existing = state.connectionsByUserId[action.userId];
+      if (existing) {
+        return state;
+      }
+      const checked = validateIcebreaker(action.icebreakerText);
+      if (!checked.ok) {
+        return state;
+      }
+      return {
+        ...state,
+        connectionsByUserId: {
+          ...state.connectionsByUserId,
+          [action.userId]: {
+            status: "pending",
+            icebreakerText: checked.text,
+            updatedAt: action.timestamp ?? "1970-01-01T00:00:00.000Z",
+          },
+        },
+      };
+    }
+
+    case "ACCEPT_MOCK_CONNECTION": {
+      const existing = state.connectionsByUserId[action.userId];
+      if (!existing || existing.status !== "pending") {
+        return state;
+      }
+      return {
+        ...state,
+        connectionsByUserId: {
+          ...state.connectionsByUserId,
+          [action.userId]: {
+            ...existing,
+            status: "accepted",
+            updatedAt: action.timestamp ?? existing.updatedAt,
+          },
+        },
+      };
+    }
+
+    case "VOUCH_MEMBER": {
+      const conn = state.connectionsByUserId[action.userId];
+      if (!state.isAuthenticated || conn?.status !== "accepted") {
+        return state;
+      }
+      if (state.vouchedUserIds.includes(action.userId)) {
+        return state;
+      }
+      return {
+        ...state,
+        vouchedUserIds: [...state.vouchedUserIds, action.userId],
+      };
+    }
+
+    case "BLOCK_HOUSEHOLD": {
+      const blockedHouseholdIds = state.blockedHouseholdIds.includes(action.householdId)
+        ? state.blockedHouseholdIds
+        : [...state.blockedHouseholdIds, action.householdId];
+
+      const nextConnections = { ...state.connectionsByUserId };
+      const timestamp = action.timestamp ?? "1970-01-01T00:00:00.000Z";
+      for (const memberId of action.memberUserIds) {
+        const existing = nextConnections[memberId];
+        nextConnections[memberId] = {
+          status: "blocked",
+          icebreakerText: existing?.icebreakerText ?? "",
+          updatedAt: timestamp,
+        };
+      }
+
+      return {
+        ...state,
+        blockedHouseholdIds,
+        connectionsByUserId: nextConnections,
+      };
+    }
+
+    case "REPORT_MEMBER": {
+      if (!state.isAuthenticated || state.reportedUserIds.includes(action.userId)) {
+        return state;
+      }
+      return {
+        ...state,
+        reportedUserIds: [...state.reportedUserIds, action.userId],
+      };
+    }
+
     case "RESET_FLOW": {
       return INITIAL_APP_FLOW_STATE;
     }
@@ -252,6 +387,11 @@ export function serializeFlowSnapshot(state: AppFlowState): string {
     hasCompletedPersonalization: state.hasCompletedPersonalization,
     personalization: state.personalization,
     filters: state.filters,
+    isGhostMode: state.isGhostMode,
+    blockedHouseholdIds: state.blockedHouseholdIds,
+    vouchedUserIds: state.vouchedUserIds,
+    reportedUserIds: state.reportedUserIds,
+    connectionsByUserId: state.connectionsByUserId,
   };
   return JSON.stringify(payload);
 }
@@ -284,6 +424,13 @@ export function parsePersistedFlowSnapshot(raw: string): Partial<AppFlowState> |
       hasCompletedPersonalization: data.hasCompletedPersonalization,
       personalization: data.personalization,
       filters: data.filters,
+      isGhostMode: data.isGhostMode,
+      blockedHouseholdIds: data.blockedHouseholdIds,
+      vouchedUserIds: data.vouchedUserIds,
+      reportedUserIds: data.reportedUserIds,
+      ...(data.connectionsByUserId !== undefined
+        ? { connectionsByUserId: data.connectionsByUserId }
+        : {}),
     };
   } catch {
     return null;

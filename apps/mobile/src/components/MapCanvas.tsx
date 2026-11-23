@@ -52,6 +52,9 @@ export type MapCanvasProps = {
   privacyRing?: { center: LatLng; radiusMiles: number } | null;
   blurredPins?: readonly MatchedHouseholdPin[];
   onPressBlurredPin?: (householdId: string) => void;
+  discoveryPins?: readonly MatchedHouseholdPin[];
+  selectedHouseholdId?: string | null;
+  onPressDiscoveryPin?: (householdId: string) => void;
   interactiveDragAdjust?: boolean;
   onMapIdleCenterChange?: (center: LatLng) => void;
 };
@@ -62,12 +65,24 @@ const DEFAULT_CAMERA_TARGET: MapCameraTarget = {
   key: 0,
 };
 
+function getMemberInitial(firstName: string): string {
+  return firstName.trim().slice(0, 1).toUpperCase() || "?";
+}
+
+function getShortHouseholdLabel(displayLabel: string): string {
+  const firstWord = displayLabel.trim().split(/\s+/)[0];
+  return firstWord && firstWord.length > 0 ? firstWord : displayLabel;
+}
+
 export function MapCanvas({
   cameraTarget = DEFAULT_CAMERA_TARGET,
   syncCamera = null,
   privacyRing = null,
   blurredPins = [],
   onPressBlurredPin,
+  discoveryPins = [],
+  selectedHouseholdId = null,
+  onPressDiscoveryPin,
   interactiveDragAdjust = false,
   onMapIdleCenterChange,
 }: MapCanvasProps) {
@@ -219,6 +234,14 @@ export function MapCanvas({
     [onPressBlurredPin],
   );
 
+  const handleDiscoveryPinPress = useCallback(
+    (householdId: string) => {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      onPressDiscoveryPin?.(householdId);
+    },
+    [onPressDiscoveryPin],
+  );
+
   const displayFocus = syncCamera ?? cameraTarget;
 
   if (!mapbox || !token) {
@@ -271,6 +294,32 @@ export function MapCanvas({
                   <Text style={styles.fallbackPinText}>
                     {pin.distanceMiles.toFixed(1)} mi · {pin.members.length} member
                     {pin.members.length !== 1 ? "s" : ""}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : null}
+
+          {discoveryPins.length > 0 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.fallbackPinsRow}
+            >
+              {discoveryPins.slice(0, 8).map((pin, index) => (
+                <Pressable
+                  key={pin.householdId}
+                  style={styles.fallbackPinPill}
+                  onPress={() => handleDiscoveryPinPress(pin.householdId)}
+                >
+                  <View
+                    style={[
+                      styles.fallbackDiscoveryDot,
+                      { backgroundColor: PIN_PALETTE[index % PIN_PALETTE.length] },
+                    ]}
+                  />
+                  <Text style={styles.fallbackPinText}>
+                    {pin.displayLabel} · {pin.distanceMiles.toFixed(1)} mi
                   </Text>
                 </Pressable>
               ))}
@@ -354,6 +403,64 @@ export function MapCanvas({
               ) : null}
               <View style={styles.pinLockDot}>
                 <Ionicons name="lock-closed" size={9} color="#0F172A" />
+              </View>
+            </Pressable>
+          </MarkerView>
+        );
+      })}
+
+      {discoveryPins.map((pin, index) => {
+        const visibleAvatars = pin.members.slice(0, 2);
+        const extraCount = pin.members.length - visibleAvatars.length;
+        const isSelected = selectedHouseholdId === pin.householdId;
+
+        return (
+          <MarkerView
+            key={pin.householdId}
+            coordinate={[pin.publicLng, pin.publicLat]}
+            anchor={{ x: 0.5, y: 0.5 }}
+            allowOverlap
+          >
+            <Pressable
+              accessibilityLabel={`${pin.displayLabel}, ${pin.members.length} linked member${pin.members.length === 1 ? "" : "s"}`}
+              accessibilityRole="button"
+              style={styles.discoveryPinContainer}
+              onPress={() => handleDiscoveryPinPress(pin.householdId)}
+            >
+              <View style={styles.stackedAvatarsRow}>
+                {visibleAvatars.map((member, memberIndex) => {
+                  const avatarColor = PIN_PALETTE[(index + memberIndex) % PIN_PALETTE.length];
+                  return (
+                    <View
+                      key={member.userId}
+                      style={[
+                        styles.discoveryAvatar,
+                        { backgroundColor: avatarColor },
+                        memberIndex > 0 && styles.discoveryAvatarOverlap,
+                        isSelected && styles.discoveryAvatarSelected,
+                      ]}
+                    >
+                      <Text style={styles.discoveryAvatarText}>
+                        {getMemberInitial(member.firstName)}
+                      </Text>
+                    </View>
+                  );
+                })}
+                {extraCount > 0 ? (
+                  <View style={styles.discoveryExtraBadge}>
+                    <Text style={styles.discoveryExtraText}>+{extraCount}</Text>
+                  </View>
+                ) : null}
+                {pin.isVerifiedLocal ? (
+                  <View style={styles.verifiedPinDot}>
+                    <Ionicons name="checkmark" size={9} color="#FFFFFF" />
+                  </View>
+                ) : null}
+              </View>
+              <View style={[styles.pinLabelPill, isSelected && styles.pinLabelPillSelected]}>
+                <Text style={[styles.pinLabelText, isSelected && styles.pinLabelTextSelected]}>
+                  {getShortHouseholdLabel(pin.displayLabel)}
+                </Text>
               </View>
             </Pressable>
           </MarkerView>
@@ -451,6 +558,89 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  discoveryPinContainer: {
+    alignItems: "center",
+    gap: 2,
+  },
+  stackedAvatarsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  discoveryAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  discoveryAvatarOverlap: {
+    marginLeft: -10,
+  },
+  discoveryAvatarSelected: {
+    borderColor: "#0F172A",
+  },
+  discoveryAvatarText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  discoveryExtraBadge: {
+    marginLeft: -8,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#0F172A",
+    borderWidth: 1.5,
+    borderColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  discoveryExtraText: {
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: "700",
+  },
+  verifiedPinDot: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    width: 15,
+    height: 15,
+    borderRadius: 8,
+    backgroundColor: "#0F766E",
+    borderWidth: 1.5,
+    borderColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pinLabelPill: {
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  pinLabelPillSelected: {
+    backgroundColor: "#0F172A",
+    borderColor: "#0F172A",
+  },
+  pinLabelText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  pinLabelTextSelected: {
+    color: "#FFFFFF",
+  },
   fallbackContainer: {
     flex: 1,
     backgroundColor: "#EBF2F7",
@@ -539,6 +729,11 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
     opacity: 0.5,
+  },
+  fallbackDiscoveryDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   fallbackPinText: {
     fontSize: 11,

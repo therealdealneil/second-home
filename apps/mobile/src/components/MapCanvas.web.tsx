@@ -13,6 +13,8 @@ export function MapCanvas({
   privacyRing = null,
   blurredPins = [],
   onPressBlurredPin,
+  discoveryPins = [],
+  onPressDiscoveryPin,
 }: MapCanvasProps) {
   const displayFocus = syncCamera ?? cameraTarget;
 
@@ -50,6 +52,26 @@ export function MapCanvas({
               >
                 <Text style={styles.pinChipText}>
                   Blurred pin · {pin.distanceMiles.toFixed(1)} mi
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : null}
+
+        {discoveryPins.length > 0 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.pinsRow}
+          >
+            {discoveryPins.slice(0, 6).map((pin) => (
+              <Pressable
+                key={pin.householdId}
+                style={styles.pinChip}
+                onPress={() => onPressDiscoveryPin?.(pin.householdId)}
+              >
+                <Text style={styles.pinChipText}>
+                  {pin.displayLabel} · {pin.distanceMiles.toFixed(1)} mi
                 </Text>
               </Pressable>
             ))}

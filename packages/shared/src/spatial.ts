@@ -353,17 +353,23 @@ export function validateCapturedGpsFix(
   };
 }
 
+export function memberMatchesOrigin(
+  member: PublicHouseholdMember,
+  selectedOrigin: GujaratLocation,
+): boolean {
+  const originCoord: LatLng = { lat: selectedOrigin.lat, lng: selectedOrigin.lng };
+  return (
+    (selectedOrigin.type === "district" && member.hometownDistrict === selectedOrigin.district) ||
+    haversineDistanceMeters({ lat: member.hometownLat, lng: member.hometownLng }, originCoord) <=
+      EXACT_HOMETOWN_RADIUS_METERS
+  );
+}
+
 function householdMatchesOrigin(
   household: PublicHouseholdPin,
   selectedOrigin: GujaratLocation,
 ): boolean {
-  const originCoord: LatLng = { lat: selectedOrigin.lat, lng: selectedOrigin.lng };
-  return household.members.some(
-    (member) =>
-      (selectedOrigin.type === "district" && member.hometownDistrict === selectedOrigin.district) ||
-      haversineDistanceMeters({ lat: member.hometownLat, lng: member.hometownLng }, originCoord) <=
-        EXACT_HOMETOWN_RADIUS_METERS,
-  );
+  return household.members.some((member) => memberMatchesOrigin(member, selectedOrigin));
 }
 
 /**

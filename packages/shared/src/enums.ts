@@ -28,3 +28,16 @@ export const H3_RESOLUTION = 7;
 export const MIN_HOUSEHOLDS_PER_HEX = 2;
 export const MAX_CURRENT_RADIUS_METERS = 40_233; // 25 mi
 export const MAX_HOMETOWN_RADIUS_METERS = 80_467; // 50 mi
+export const ICEBREAKER_MAX_LENGTH = 140;
+
+export const EntityIdSchema = z
+  .string()
+  .trim()
+  .regex(/^[a-zA-Z0-9_-]{1,64}$/, "ID must be 1-64 alphanumeric, hyphen, or underscore characters");
+
+export const ConnectionRecordSchema = z.object({
+  status: ConnectionStatusSchema,
+  icebreakerText: z.string().max(ICEBREAKER_MAX_LENGTH),
+  updatedAt: z.string(),
+});
+export type ConnectionRecord = z.infer<typeof ConnectionRecordSchema>;
