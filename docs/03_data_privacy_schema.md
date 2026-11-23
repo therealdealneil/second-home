@@ -161,20 +161,46 @@ AS $$
         'avatar_url', u.avatar_url,
         'age_bracket', u.age_bracket,
         'hometown_name', u.hometown_name,
+        'hometown_district', u.hometown_district,
         'vouch_count', u.vouch_count,
         'interests', u.interests
       )
+      ORDER BY u.is_household_admin DESC, u.created_at ASC, u.id ASC
     ) AS members
   FROM households h
   JOIN users u ON u.household_id = h.id
   CROSS JOIN dest_point d
   CROSS JOIN origin_point o
   WHERE
-    u.status = 'active'
-    AND ST_DWithin(h.public_current_geog, d.geog, LEAST(p_current_radius_meters, 40233))
-    AND ST_DWithin(u.hometown_geog, o.geog, LEAST(p_hometown_radius_meters, 80467))
-    AND (p_age_brackets IS NULL OR u.age_bracket = ANY(p_age_brackets))
-    AND (p_life_stages IS NULL OR h.life_stage = ANY(p_life_stages))
+    auth.uid() IS NOT NULL
+    AND EXISTS (
+      SELECT 1 FROM users me
+      WHERE me.id = auth.uid() AND me.status IN ('quarantined', 'active', 'paused')
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM users me_hh
+      WHERE me_hh.id = auth.uid() AND me_hh.household_id = h.id
+    )
+    AND u.status = 'active'
+    AND ST_DWithin(h.public_current_geog, d.geog, LEAST(GREATEST(COALESCE(p_current_radius_meters, 0), 0), 40233))
+    AND (p_life_stages IS NULL OR CARDINALITY(p_life_stages) = 0 OR h.life_stage = ANY(p_life_stages))
+    AND EXISTS (
+      SELECT 1 FROM users match_u
+      WHERE match_u.household_id = h.id
+        AND match_u.status = 'active'
+        AND ST_DWithin(match_u.hometown_geog, o.geog, LEAST(GREATEST(COALESCE(p_hometown_radius_meters, 0), 0), 80467))
+        AND (p_age_brackets IS NULL OR CARDINALITY(p_age_brackets) = 0 OR match_u.age_bracket = ANY(p_age_brackets))
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM connections c
+      JOIN users blocked_u ON blocked_u.household_id = h.id
+      WHERE c.status = 'blocked'
+        AND (
+          (c.requester_id = auth.uid() AND c.recipient_id = blocked_u.id)
+          OR (c.recipient_id = auth.uid() AND c.requester_id = blocked_u.id)
+        )
+    )
   GROUP BY h.id, d.geog
   ORDER BY distance_meters ASC
   LIMIT 100;
