@@ -107,6 +107,8 @@ export default function FiltersSheet() {
             return (
               <Pressable
                 key={bracket}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: selected }}
                 style={[styles.pill, selected && styles.pillSelected]}
                 onPress={() => toggleAgeBracket(bracket)}
               >
@@ -125,6 +127,8 @@ export default function FiltersSheet() {
             return (
               <Pressable
                 key={stage}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: selected }}
                 style={[styles.pill, selected && styles.pillSelected]}
                 onPress={() => toggleLifeStage(stage)}
               >

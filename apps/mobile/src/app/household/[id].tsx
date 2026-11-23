@@ -137,25 +137,34 @@ export default function HouseholdDrawerSheet() {
   }
 
   function confirmBlockHousehold() {
-    Alert.alert(
-      `Block ${household!.displayLabel}?`,
-      "This immediately hides their household pin from your map and revokes WhatsApp handoffs.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Block",
-          style: "destructive",
-          onPress: () => {
-            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-            blockHousehold({
-              householdId: household!.householdId,
-              memberUserIds: household!.members.map((m) => m.userId),
-            });
-            dismissOrReturnHome(router);
-          },
-        },
-      ],
-    );
+    const title = `Block ${household!.displayLabel}?`;
+    const message =
+      "This immediately hides their household pin from your map and revokes WhatsApp handoffs.";
+
+    function executeBlock() {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      blockHousehold({
+        householdId: household!.householdId,
+        memberUserIds: household!.members.map((m) => m.userId),
+      });
+      dismissOrReturnHome(router);
+    }
+
+    if (Platform.OS === "web") {
+      if (typeof window !== "undefined" && window.confirm(`${title}\n\n${message}`)) {
+        executeBlock();
+      }
+      return;
+    }
+
+    Alert.alert(title, message, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Block",
+        style: "destructive",
+        onPress: executeBlock,
+      },
+    ]);
   }
 
   return (
