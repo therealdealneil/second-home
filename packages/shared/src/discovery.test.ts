@@ -5,6 +5,7 @@ import {
   buildWhatsappHandoffUrl,
   evaluateDiscoveryMatches,
   validateIcebreaker,
+  validateWaitlistSubmission,
 } from "./discovery";
 import { ICEBREAKER_MAX_LENGTH } from "./enums";
 import { getGujaratLocationById } from "./locations";
@@ -351,5 +352,117 @@ describe("evaluateDiscoveryMatches multi-origin and filter rules", () => {
       filters: { ...DEFAULT_DISCOVERY_FILTERS, originMode: "all_gujarat", radiusMiles: 25 },
     });
     expect(clamped).toHaveLength(MAX_MATCH_RESULTS);
+  });
+});
+
+describe("metro expansion waitlist validation", () => {
+  it("accepts valid email or 10-15 digit phone for preset metros and custom cities", () => {
+    expect(
+      validateWaitlistSubmission({
+        metro: "Austin, TX",
+        contact: "  neighbor@example.com  ",
+      }),
+    ).toEqual({
+      ok: true,
+      data: {
+        metro: "Austin, TX",
+        contact: "neighbor@example.com",
+        resolvedCity: "Austin, TX",
+      },
+    });
+
+    const phoneRes = validateWaitlistSubmission({
+      metro: "Other",
+      customCity: "Sugar Land, TX",
+      contact: "+1 (512) 555-0144",
+    });
+    expect(phoneRes.ok).toBe(true);
+    if (phoneRes.ok) {
+      expect(phoneRes.data.resolvedCity).toBe("Sugar Land, TX");
+    }
+  });
+
+  it("rejects missing/invalid customCity, out-of-range contact strings, and malformed inputs", () => {
+    expect(
+      validateWaitlistSubmission({
+        metro: "Other",
+        contact: "neighbor@example.com",
+      }).ok,
+    ).toBe(false);
+
+    expect(
+      validateWaitlistSubmission({
+        metro: "Other",
+        customCity: " ",
+        contact: "neighbor@example.com",
+      }).ok,
+    ).toBe(false);
+
+    expect(
+      validateWaitlistSubmission({
+        metro: "Other",
+        customCity: "A",
+        contact: "neighbor@example.com",
+      }).ok,
+    ).toBe(false);
+
+    expect(
+      validateWaitlistSubmission({
+        metro: "Other",
+        customCity: "C".repeat(81),
+        contact: "neighbor@example.com",
+      }).ok,
+    ).toBe(false);
+
+    expect(
+      validateWaitlistSubmission({
+        metro: "Houston, TX",
+        contact: "   ",
+      }).ok,
+    ).toBe(false);
+
+    expect(
+      validateWaitlistSubmission({
+        metro: "Houston, TX",
+        contact: "not-an-email-or-phone",
+      }).ok,
+    ).toBe(false);
+
+    expect(
+      validateWaitlistSubmission({
+        metro: "Houston, TX",
+        contact: "512-555-0199 ext 1",
+      }).ok,
+    ).toBe(false);
+
+    expect(
+      validateWaitlistSubmission({
+        metro: "Dallas-Fort Worth, TX",
+        contact: "12345",
+      }).ok,
+    ).toBe(false);
+
+    expect(
+      validateWaitlistSubmission({
+        metro: "Dallas-Fort Worth, TX",
+        contact: "1234567890123456",
+      }).ok,
+    ).toBe(false);
+
+    expect(
+      validateWaitlistSubmission({
+        metro: "Houston, TX",
+        contact: `${"a".repeat(110)}@example.com`,
+      }).ok,
+    ).toBe(false);
+
+    expect(
+      validateWaitlistSubmission({
+        metro: "Invalid Metro",
+        contact: "neighbor@example.com",
+      }).ok,
+    ).toBe(false);
+
+    expect(validateWaitlistSubmission(null).ok).toBe(false);
   });
 });

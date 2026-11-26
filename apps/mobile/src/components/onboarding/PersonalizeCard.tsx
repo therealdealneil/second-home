@@ -31,19 +31,24 @@ export function PersonalizeCard({
   const [ageBracket, setAgeBracket] = useState<AgeBracket | null>(initialDraft.ageBracket);
   const [lifeStage, setLifeStage] = useState<LifeStage | null>(initialDraft.lifeStage);
   const [interests, setInterests] = useState<OnboardingInterest[]>(initialDraft.interests);
+  const [interestNotice, setInterestNotice] = useState<string | null>(null);
   const [inviteStatus, setInviteStatus] = useState<string | null>(null);
 
   function toggleInterest(item: OnboardingInterest) {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setInterests((prev) => {
-      if (prev.includes(item)) {
-        return prev.filter((x) => x !== item);
-      }
-      if (prev.length >= 3) {
-        return [...prev.slice(1), item];
-      }
-      return [...prev, item];
-    });
+    if (interests.includes(item)) {
+      setInterestNotice(null);
+      setInterests(interests.filter((x) => x !== item));
+      return;
+    }
+    if (interests.length >= 3) {
+      const removed = interests[0];
+      setInterestNotice(`Replaced ${removed} with ${item} (up to 3 interests).`);
+      setInterests([...interests.slice(1), item]);
+      return;
+    }
+    setInterestNotice(null);
+    setInterests([...interests, item]);
   }
 
   async function handleInviteFamily() {
@@ -73,16 +78,23 @@ export function PersonalizeCard({
         ) : null}
 
         <Text style={styles.sectionLabel}>Age Bracket</Text>
-        <View style={styles.pillsRow}>
+        <View
+          accessibilityRole="radiogroup"
+          accessibilityLabel="Age Bracket"
+          style={styles.pillsRow}
+        >
           {AGE_BRACKETS.map((value) => {
             const active = ageBracket === value;
             return (
               <Pressable
                 key={value}
+                accessibilityRole="radio"
+                accessibilityLabel={`Age Bracket: ${AGE_BRACKET_LABELS[value]}`}
+                accessibilityState={{ checked: active }}
                 style={[styles.pill, active && styles.pillActive]}
                 onPress={() => {
                   void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setAgeBracket((prev) => (prev === value ? null : value));
+                  setAgeBracket(value);
                 }}
               >
                 <Text style={[styles.pillText, active && styles.pillTextActive]}>
@@ -94,16 +106,23 @@ export function PersonalizeCard({
         </View>
 
         <Text style={styles.sectionLabel}>Life Stage</Text>
-        <View style={styles.pillsRow}>
+        <View
+          accessibilityRole="radiogroup"
+          accessibilityLabel="Life Stage"
+          style={styles.pillsRow}
+        >
           {LIFE_STAGES.map((value) => {
             const active = lifeStage === value;
             return (
               <Pressable
                 key={value}
+                accessibilityRole="radio"
+                accessibilityLabel={`Life Stage: ${LIFE_STAGE_LABELS[value]}`}
+                accessibilityState={{ checked: active }}
                 style={[styles.pill, active && styles.pillActive]}
                 onPress={() => {
                   void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setLifeStage((prev) => (prev === value ? null : value));
+                  setLifeStage(value);
                 }}
               >
                 <Text style={[styles.pillText, active && styles.pillTextActive]}>
@@ -121,6 +140,8 @@ export function PersonalizeCard({
             return (
               <Pressable
                 key={value}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: active }}
                 style={[styles.pill, active && styles.pillActive]}
                 onPress={() => toggleInterest(value)}
               >
@@ -129,6 +150,11 @@ export function PersonalizeCard({
             );
           })}
         </View>
+        {interestNotice ? (
+          <Text style={styles.inviteStatus} accessibilityLiveRegion="polite">
+            {interestNotice}
+          </Text>
+        ) : null}
 
         {!pendingInviteCode ? (
           <Pressable style={styles.whatsappInviteButton} onPress={() => void handleInviteFamily()}>
