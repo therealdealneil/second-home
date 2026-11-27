@@ -7,6 +7,7 @@ import {
   type AppFlowPhase,
   type ConfirmedNeighborhood,
   type DiscoveryFilters,
+  type MapRegion,
   type PersistedFlowSnapshot,
   type PersonalizationDraft,
 } from "./navigation";
@@ -24,6 +25,7 @@ export type AppFlowState = {
   hasCompletedPersonalization: boolean;
   personalization: PersonalizationDraft;
   filters: DiscoveryFilters;
+  mapRegion: MapRegion;
   isGhostMode: boolean;
   blockedHouseholdIds: string[];
   vouchedUserIds: string[];
@@ -56,6 +58,7 @@ export const INITIAL_APP_FLOW_STATE: AppFlowState = {
     interests: [],
   },
   filters: DEFAULT_DISCOVERY_FILTERS,
+  mapRegion: "san_antonio",
   isGhostMode: false,
   blockedHouseholdIds: [],
   vouchedUserIds: [],
@@ -77,6 +80,8 @@ export type AppFlowAction =
   | { type: "COMPLETE_PERSONALIZATION"; personalization?: PersonalizationDraft }
   | { type: "CLEAR_PENDING_INTENT" }
   | { type: "UPDATE_FILTERS"; filters: Partial<DiscoveryFilters> }
+  | { type: "SET_MAP_REGION"; region: MapRegion }
+  | { type: "TOGGLE_MAP_REGION" }
   | { type: "TOGGLE_GHOST_MODE"; enabled?: boolean }
   | {
       type: "SEND_CONNECTION_REQUEST";
@@ -129,6 +134,8 @@ export function appFlowReducer(state: AppFlowState, action: AppFlowAction): AppF
         // Preserve any deep-link state captured concurrently while storage loaded
         pendingInviteCode: state.pendingInviteCode ?? action.payload.pendingInviteCode ?? null,
         selectedOrigin: state.selectedOrigin ?? action.payload.selectedOrigin ?? null,
+        // Cold launches always open on the San Antonio map
+        mapRegion: "san_antonio",
         // Transient navigation intents shouldn't survive cold restarts
         pendingIntent: null,
       };
@@ -271,6 +278,32 @@ export function appFlowReducer(state: AppFlowState, action: AppFlowAction): AppF
           ...state.filters,
           ...action.filters,
         },
+      };
+    }
+
+    case "SET_MAP_REGION": {
+      if (state.phase !== "discovery") {
+        return {
+          ...state,
+          mapRegion: "san_antonio",
+        };
+      }
+      return {
+        ...state,
+        mapRegion: action.region,
+      };
+    }
+
+    case "TOGGLE_MAP_REGION": {
+      if (state.phase !== "discovery") {
+        return {
+          ...state,
+          mapRegion: "san_antonio",
+        };
+      }
+      return {
+        ...state,
+        mapRegion: state.mapRegion === "san_antonio" ? "gujarat" : "san_antonio",
       };
     }
 

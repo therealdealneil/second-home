@@ -4,6 +4,7 @@ import type { MapCanvasProps } from "./MapCanvas";
 
 // Web stub: mobile registration and pin creation are native-only per AGENTS.md guardrail #3.
 export function MapCanvas({
+  mapRegion = "san_antonio",
   cameraTarget = {
     center: SAN_ANTONIO_DEFAULT_CENTER,
     zoomLevel: SAN_ANTONIO_DEFAULT_ZOOM,
@@ -11,9 +12,11 @@ export function MapCanvas({
   },
   syncCamera = null,
   privacyRing = null,
+  originAnchor = null,
   blurredPins = [],
   onPressBlurredPin,
   discoveryPins = [],
+  gujaratPins = [],
   onPressDiscoveryPin,
 }: MapCanvasProps) {
   const displayFocus = syncCamera ?? cameraTarget;
@@ -22,7 +25,9 @@ export function MapCanvas({
     <View style={styles.container}>
       <View style={styles.card}>
         <Text style={styles.eyebrow}>SECOND HOME MOBILE</Text>
-        <Text style={styles.title}>San Antonio Map Preview</Text>
+        <Text style={styles.title}>
+          {mapRegion === "gujarat" ? "Gujarat Hometown Map Preview" : "San Antonio Map Preview"}
+        </Text>
         <Text style={styles.body}>
           Interactive Mapbox discovery & pin verification run on iOS and Android builds.
         </Text>
@@ -36,6 +41,10 @@ export function MapCanvas({
             Privacy ring: ~{privacyRing.radiusMiles.toFixed(1)} mi at{" "}
             {privacyRing.center.lat.toFixed(4)}, {privacyRing.center.lng.toFixed(4)}
           </Text>
+        ) : null}
+
+        {originAnchor ? (
+          <Text style={styles.originMeta}>Your Gujarat hometown: {originAnchor.label}</Text>
         ) : null}
 
         {blurredPins.length > 0 ? (
@@ -58,7 +67,27 @@ export function MapCanvas({
           </ScrollView>
         ) : null}
 
-        {discoveryPins.length > 0 ? (
+        {mapRegion === "gujarat" && gujaratPins.length > 0 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.pinsRow}
+          >
+            {gujaratPins.slice(0, 6).map((pin) => (
+              <Pressable
+                key={pin.pinId}
+                style={styles.pinChip}
+                onPress={() => onPressDiscoveryPin?.(pin.householdId)}
+              >
+                <Text style={styles.pinChipText}>
+                  {pin.displayLabel} · {pin.hometownDistrict}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : null}
+
+        {mapRegion === "san_antonio" && discoveryPins.length > 0 ? (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -124,6 +153,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     color: "#0F766E",
+  },
+  originMeta: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#B45309",
   },
   pinsRow: {
     gap: 8,

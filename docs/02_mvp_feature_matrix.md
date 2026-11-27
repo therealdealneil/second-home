@@ -33,6 +33,7 @@
 | **F-15** | **Viral "Hometown Card" Share** | Generate an image share card (*"12 households from Surat are near me in San Antonio"*) optimized for 1-tap sharing to WhatsApp Status and groups. | **P1** | Mobile |
 | **F-16** | **"Taste of Home" Community Pins** | Allow verified users to pin trusted local spots in San Antonio (e.g., Gujarati grocery stores, temples, Garba venues, doctors) to boost single-player utility. | **P2** | Mobile + Web |
 | **F-17** | **Metro Expansion Waitlist** | Capture email/phone + city when users outside San Antonio download the app, allowing data-driven selection of Corridor #2 (e.g., Austin, DFW, or Houston). | **P2** | Mobile + Web |
+| **F-18** | **Corridor Flip (San Antonio ⇄ Gujarat)** | Discovery-phase map toggle that flies the camera between San Antonio and Gujarat, projecting matched San Antonio neighbors onto their public Gujarat hometown coordinates (including multi-origin household split pins and deterministic co-located spread). | **P1** | Mobile + Backend |
 
 ---
 

@@ -4,7 +4,9 @@ import {
   SAN_ANTONIO_DEFAULT_ZOOM,
   createCirclePolygonGeoJSON,
   haversineDistanceMeters,
+  type GujaratProjectedPin,
   type LatLng,
+  type MapRegion,
   type MatchedHouseholdPin,
 } from "@second-home/shared";
 import { BlurView } from "expo-blur";
@@ -38,21 +40,29 @@ export type MapCameraTarget = {
   center: LatLng;
   zoomLevel: number;
   key: number;
+  animationMode?: "easeTo" | "flyTo";
+  animationDuration?: number;
 };
 
 export type MapSyncCamera = {
   center: LatLng;
   zoomLevel: number;
   key: string;
+  region?: MapRegion;
+  animationMode?: "easeTo" | "flyTo";
+  animationDuration?: number;
 };
 
 export type MapCanvasProps = {
+  mapRegion?: MapRegion;
   cameraTarget?: MapCameraTarget;
   syncCamera?: MapSyncCamera | null;
   privacyRing?: { center: LatLng; radiusMiles: number } | null;
+  originAnchor?: { center: LatLng; label: string } | null;
   blurredPins?: readonly MatchedHouseholdPin[];
   onPressBlurredPin?: (householdId: string) => void;
   discoveryPins?: readonly MatchedHouseholdPin[];
+  gujaratPins?: readonly GujaratProjectedPin[];
   selectedHouseholdId?: string | null;
   onPressDiscoveryPin?: (householdId: string) => void;
   interactiveDragAdjust?: boolean;
@@ -75,12 +85,15 @@ function getShortHouseholdLabel(displayLabel: string): string {
 }
 
 export function MapCanvas({
+  mapRegion = "san_antonio",
   cameraTarget = DEFAULT_CAMERA_TARGET,
   syncCamera = null,
   privacyRing = null,
+  originAnchor = null,
   blurredPins = [],
   onPressBlurredPin,
   discoveryPins = [],
+  gujaratPins = [],
   selectedHouseholdId = null,
   onPressDiscoveryPin,
   interactiveDragAdjust = false,
@@ -95,7 +108,9 @@ export function MapCanvas({
   const cameraRef = useRef<CameraRef | null>(null);
   const prevTargetKeyRef = useRef(0);
   const prevSyncKeyRef = useRef<string | null>(null);
+  const prevSyncRegionRef = useRef<MapRegion | undefined>(syncCamera?.region);
   const lastProgrammaticCameraMsRef = useRef(0);
+  const lastProgrammaticDurationRef = useRef(550);
   const userInteractedSinceProgrammaticRef = useRef(false);
   const lastIdleZoomRef = useRef<number | null>(null);
 
@@ -152,23 +167,34 @@ export function MapCanvas({
 
     const targetChanged = cameraTarget.key > 0 && cameraTarget.key !== prevTargetKeyRef.current;
     const syncChanged = Boolean(syncCamera && syncCamera.key !== prevSyncKeyRef.current);
+    const regionFlipped = Boolean(
+      syncCamera?.region &&
+      prevSyncRegionRef.current &&
+      syncCamera.region !== prevSyncRegionRef.current,
+    );
 
     prevTargetKeyRef.current = cameraTarget.key;
     prevSyncKeyRef.current = syncCamera?.key ?? null;
+    prevSyncRegionRef.current = syncCamera?.region;
 
     const chosen = targetChanged ? cameraTarget : syncChanged ? syncCamera : null;
     if (!chosen) {
       return;
     }
 
+    const shouldFlyForRegionFlip = !targetChanged && syncChanged && regionFlipped;
+    const duration = chosen.animationDuration ?? (shouldFlyForRegionFlip ? 1150 : 550);
+    const animationMode = chosen.animationMode ?? (shouldFlyForRegionFlip ? "flyTo" : "easeTo");
+
     lastProgrammaticCameraMsRef.current = Date.now();
+    lastProgrammaticDurationRef.current = duration;
     userInteractedSinceProgrammaticRef.current = false;
     lastIdleZoomRef.current = chosen.zoomLevel;
     cameraRef.current.setCamera({
       centerCoordinate: [chosen.center.lng, chosen.center.lat],
       zoomLevel: chosen.zoomLevel,
-      animationDuration: 550,
-      animationMode: "easeTo",
+      animationDuration: duration,
+      animationMode,
     });
   }, [cameraMounted, cameraTarget, syncCamera, tokenReady]);
 
@@ -178,6 +204,11 @@ export function MapCanvas({
     }
     return createCirclePolygonGeoJSON(privacyRing.center, privacyRing.radiusMiles);
   }, [privacyRing]);
+
+  const originAnchorCoord = useMemo<[number, number] | null>(
+    () => (originAnchor ? [originAnchor.center.lng, originAnchor.center.lat] : null),
+    [originAnchor],
+  );
 
   const ringCenterCoord = useMemo<[number, number] | null>(
     () => (privacyRing ? [privacyRing.center.lng, privacyRing.center.lat] : null),
@@ -204,7 +235,11 @@ export function MapCanvas({
     if (!interactiveDragAdjustRef.current || !onMapIdleCenterChangeRef.current) {
       return;
     }
-    if (Date.now() - lastProgrammaticCameraMsRef.current < 850 && !hasUserGesture) {
+    if (
+      Date.now() - lastProgrammaticCameraMsRef.current <
+        lastProgrammaticDurationRef.current + 300 &&
+      !hasUserGesture
+    ) {
       return;
     }
     // Ignore pure pinch/double-tap zoom adjustments so zooming doesn't relocate the ring.
@@ -249,7 +284,9 @@ export function MapCanvas({
       <View style={styles.fallbackContainer}>
         <View style={styles.fallbackGrid} />
         <View style={styles.fallbackCard}>
-          <Text style={styles.fallbackEyebrow}>SAN ANTONIO CORRIDOR MAP</Text>
+          <Text style={styles.fallbackEyebrow}>
+            {mapRegion === "gujarat" ? "GUJARAT HOMETOWN MAP" : "SAN ANTONIO CORRIDOR MAP"}
+          </Text>
           <Text style={styles.fallbackTitle}>
             {hasNative ? "Mapbox Public Token Needed" : "Development Build Required for Mapbox"}
           </Text>
@@ -300,7 +337,33 @@ export function MapCanvas({
             </ScrollView>
           ) : null}
 
-          {discoveryPins.length > 0 ? (
+          {mapRegion === "gujarat" && gujaratPins.length > 0 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.fallbackPinsRow}
+            >
+              {gujaratPins.slice(0, 8).map((pin, index) => (
+                <Pressable
+                  key={pin.pinId}
+                  style={styles.fallbackPinPill}
+                  onPress={() => handleDiscoveryPinPress(pin.householdId)}
+                >
+                  <View
+                    style={[
+                      styles.fallbackDiscoveryDot,
+                      { backgroundColor: PIN_PALETTE[index % PIN_PALETTE.length] },
+                    ]}
+                  />
+                  <Text style={styles.fallbackPinText}>
+                    {pin.displayLabel} · {pin.hometownDistrict}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : null}
+
+          {mapRegion === "san_antonio" && discoveryPins.length > 0 ? (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -371,6 +434,19 @@ export function MapCanvas({
           <View style={styles.homeRingMarker}>
             <View style={styles.homeRingInner}>
               <Ionicons name="home" size={14} color="#FFFFFF" />
+            </View>
+          </View>
+        </MarkerView>
+      ) : null}
+
+      {originAnchorCoord && originAnchor ? (
+        <MarkerView coordinate={originAnchorCoord} anchor={{ x: 0.5, y: 0.5 }} allowOverlap>
+          <View
+            accessibilityLabel={`Your Gujarat hometown: ${originAnchor.label}`}
+            style={styles.originAnchorMarker}
+          >
+            <View style={styles.originAnchorInner}>
+              <Ionicons name="location" size={14} color="#FFFFFF" />
             </View>
           </View>
         </MarkerView>
@@ -466,6 +542,74 @@ export function MapCanvas({
           </MarkerView>
         );
       })}
+
+      {gujaratPins.map((pin, index) => {
+        const visibleAvatars = pin.members.slice(0, 2);
+        const extraCount = pin.members.length - visibleAvatars.length;
+        const isSelected = selectedHouseholdId === pin.householdId;
+
+        return (
+          <MarkerView
+            key={pin.pinId}
+            coordinate={[pin.lng, pin.lat]}
+            anchor={{ x: 0.5, y: 0.5 }}
+            allowOverlap
+          >
+            <Pressable
+              accessibilityLabel={`${pin.displayLabel} in ${pin.hometownName}`}
+              accessibilityRole="button"
+              style={styles.discoveryPinContainer}
+              onPress={() => handleDiscoveryPinPress(pin.householdId)}
+            >
+              <View style={styles.stackedAvatarsRow}>
+                {visibleAvatars.map((member, memberIndex) => {
+                  const avatarColor = PIN_PALETTE[(index + memberIndex) % PIN_PALETTE.length];
+                  return (
+                    <View
+                      key={member.userId}
+                      style={[
+                        styles.discoveryAvatar,
+                        { backgroundColor: avatarColor },
+                        memberIndex > 0 && styles.discoveryAvatarOverlap,
+                        isSelected && styles.discoveryAvatarSelected,
+                      ]}
+                    >
+                      <Text style={styles.discoveryAvatarText}>
+                        {getMemberInitial(member.firstName)}
+                      </Text>
+                    </View>
+                  );
+                })}
+                {extraCount > 0 ? (
+                  <View style={styles.discoveryExtraBadge}>
+                    <Text style={styles.discoveryExtraText}>+{extraCount}</Text>
+                  </View>
+                ) : null}
+                {pin.isMultiOriginHousehold ? (
+                  <View style={styles.multiOriginPinDot}>
+                    <Ionicons name="git-branch" size={8} color="#FFFFFF" />
+                  </View>
+                ) : pin.isVerifiedLocal ? (
+                  <View style={styles.verifiedPinDot}>
+                    <Ionicons name="checkmark" size={9} color="#FFFFFF" />
+                  </View>
+                ) : null}
+              </View>
+              <View
+                style={[
+                  styles.pinLabelPill,
+                  styles.gujaratPinLabelPill,
+                  isSelected && styles.pinLabelPillSelected,
+                ]}
+              >
+                <Text style={[styles.pinLabelText, isSelected && styles.pinLabelTextSelected]}>
+                  {getShortHouseholdLabel(pin.displayLabel)}
+                </Text>
+              </View>
+            </Pressable>
+          </MarkerView>
+        );
+      })}
     </MapView>
   );
 }
@@ -487,6 +631,29 @@ const styles = StyleSheet.create({
     height: 26,
     borderRadius: 13,
     backgroundColor: "#0F766E",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  originAnchorMarker: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(180, 83, 9, 0.22)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  originAnchorInner: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "#B45309",
     borderWidth: 2,
     borderColor: "#FFFFFF",
     alignItems: "center",
@@ -621,6 +788,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  multiOriginPinDot: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    width: 15,
+    height: 15,
+    borderRadius: 8,
+    backgroundColor: "#B45309",
+    borderWidth: 1.5,
+    borderColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   pinLabelPill: {
     backgroundColor: "rgba(255, 255, 255, 0.95)",
     borderRadius: 999,
@@ -628,6 +808,9 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderWidth: 1,
     borderColor: "#E2E8F0",
+  },
+  gujaratPinLabelPill: {
+    borderColor: "#FDE68A",
   },
   pinLabelPillSelected: {
     backgroundColor: "#0F172A",

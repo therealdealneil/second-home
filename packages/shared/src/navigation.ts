@@ -18,6 +18,18 @@ export const SAN_ANTONIO_DEFAULT_CENTER = {
 } as const;
 export const SAN_ANTONIO_DEFAULT_ZOOM = 10.5;
 
+export const GUJARAT_DEFAULT_CENTER = {
+  lat: 22.45,
+  lng: 71.75,
+} as const;
+export const GUJARAT_ALL_ZOOM = 6.5;
+export const GUJARAT_DISTRICT_ZOOM = 9.0;
+export const GUJARAT_TOWN_ZOOM = 10.8;
+
+export const MAP_REGIONS = ["san_antonio", "gujarat"] as const;
+export const MapRegionSchema = z.enum(MAP_REGIONS);
+export type MapRegion = z.infer<typeof MapRegionSchema>;
+
 export const FUZZ_RADIUS_MIN_MILES = 0.5;
 export const FUZZ_RADIUS_MAX_MILES = 1.5;
 export const DYNAMIC_ZOOM_MIN_MATCHES = 3;
