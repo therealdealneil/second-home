@@ -404,6 +404,7 @@ export function MapCanvas({
       style={styles.map}
       styleURL={DEFAULT_STYLE_URL}
       projection="mercator"
+      scaleBarEnabled={false}
       onCameraChanged={handleCameraChanged}
       onMapIdle={handleMapIdle}
     >

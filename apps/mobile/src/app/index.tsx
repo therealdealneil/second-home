@@ -15,7 +15,7 @@ import {
   type DiscoveryRadiusMiles,
   type GujaratLocation,
 } from "@second-home/shared";
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, usePathname, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { KeyboardAvoidingView, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -42,6 +42,7 @@ const DISCOVERY_ZOOM_BY_RADIUS: Record<DiscoveryRadiusMiles, number> = {
 
 export default function MapHomeScreen() {
   const router = useRouter();
+  const pathname = usePathname();
   const params = useLocalSearchParams<{ origin_id?: string | string[] }>();
   const {
     state,
@@ -327,11 +328,24 @@ export default function MapHomeScreen() {
     [openAuthForIntent],
   );
 
+  const selectedHouseholdId = useMemo(
+    () => (pathname.startsWith("/household/") ? pathname.slice("/household/".length) : null),
+    [pathname],
+  );
+
   const handlePressDiscoveryPin = useCallback(
     (householdId: string) => {
-      router.push({ pathname: "/household/[id]", params: { id: householdId } });
+      const target = { pathname: "/household/[id]" as const, params: { id: householdId } };
+      if (pathname === `/household/${householdId}`) {
+        return;
+      }
+      if (pathname.startsWith("/household/")) {
+        router.replace(target);
+        return;
+      }
+      router.push(target);
     },
-    [router],
+    [pathname, router],
   );
 
   return (
@@ -346,6 +360,7 @@ export default function MapHomeScreen() {
         onPressBlurredPin={handlePressBlurredPin}
         discoveryPins={isGujaratView ? [] : discoveryMatches}
         gujaratPins={gujaratPins}
+        selectedHouseholdId={selectedHouseholdId}
         onPressDiscoveryPin={handlePressDiscoveryPin}
         interactiveDragAdjust={
           state.phase === "confirm_neighborhood" && location.status === "snapped"
