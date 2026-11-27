@@ -71,7 +71,8 @@
         }
       ],
       "expo-image",
-      "expo-font"
+      "expo-font",
+      "./plugins/withWindowsCmakeVersion"
     ],
     "experiments": {
       "typedRoutes": true
