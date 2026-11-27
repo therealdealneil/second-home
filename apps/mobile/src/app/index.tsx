@@ -1,11 +1,16 @@
 import {
   DEFAULT_DISCOVERY_FILTERS,
+  GUJARAT_ALL_ZOOM,
+  GUJARAT_DEFAULT_CENTER,
+  GUJARAT_DISTRICT_ZOOM,
+  GUJARAT_TOWN_ZOOM,
   PRIVACY_RING_DISPLAY_RADIUS_MILES,
   SAN_ANTONIO_DEFAULT_CENTER,
   SAN_ANTONIO_DEFAULT_ZOOM,
   evaluateBlurredPreviewMatches,
   evaluateDiscoveryMatches,
   parseOriginDeepLinkParam,
+  projectGujaratDiscoveryPins,
   type ConfirmedNeighborhood,
   type DiscoveryRadiusMiles,
   type GujaratLocation,
@@ -15,7 +20,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { KeyboardAvoidingView, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MapCanvas, type MapCameraTarget, type MapSyncCamera } from "@/components/MapCanvas";
-import { DiscoveryBottomTray, DiscoveryTopControls } from "@/components/discovery/DiscoveryHud";
+import {
+  DiscoveryBottomTray,
+  DiscoveryTopControls,
+  MapFlipButton,
+} from "@/components/discovery/DiscoveryHud";
 import { BlurredPreviewCard } from "@/components/onboarding/BlurredPreviewCard";
 import { GujaratAutocompleteCard } from "@/components/onboarding/GujaratAutocompleteCard";
 import { NeighborhoodConfirmCard } from "@/components/onboarding/NeighborhoodConfirmCard";
@@ -42,6 +51,7 @@ export default function MapHomeScreen() {
     openAuthForIntent,
     completePersonalization,
     updateFilters,
+    toggleMapRegion,
     toggleGhostMode,
     resetPrototypeFlow,
   } = useAppFlow();
@@ -137,6 +147,13 @@ export default function MapHomeScreen() {
     state.selectedOrigin,
   ]);
 
+  const isGujaratView = state.phase === "discovery" && state.mapRegion === "gujarat";
+
+  const gujaratPins = useMemo(
+    () => (isGujaratView ? projectGujaratDiscoveryPins(discoveryMatches) : []),
+    [discoveryMatches, isGujaratView],
+  );
+
   const syncCamera = useMemo<MapSyncCamera | null>(() => {
     if (!isHydrated || !state.confirmedNeighborhood) {
       return null;
@@ -149,11 +166,31 @@ export default function MapHomeScreen() {
       };
     }
     if (state.phase === "discovery") {
+      if (state.mapRegion === "gujarat") {
+        if (state.filters.originMode === "exact_town" && state.selectedOrigin) {
+          const originZoom =
+            state.selectedOrigin.type === "district" ? GUJARAT_DISTRICT_ZOOM : GUJARAT_TOWN_ZOOM;
+          return {
+            center: { lat: state.selectedOrigin.lat, lng: state.selectedOrigin.lng },
+            zoomLevel: originZoom,
+            key: `discovery:gujarat:${state.selectedOrigin.id}:${originZoom}`,
+            region: "gujarat",
+          };
+        }
+        return {
+          center: GUJARAT_DEFAULT_CENTER,
+          zoomLevel: GUJARAT_ALL_ZOOM,
+          key: `discovery:gujarat:all:${GUJARAT_ALL_ZOOM}`,
+          region: "gujarat",
+        };
+      }
+
       const discoveryZoom = DISCOVERY_ZOOM_BY_RADIUS[state.filters.radiusMiles];
       return {
         center: state.confirmedNeighborhood.fuzzedCenter,
         zoomLevel: discoveryZoom,
-        key: `discovery:${state.filters.radiusMiles}:${state.confirmedNeighborhood.fuzzedCenter.lat}:${state.confirmedNeighborhood.fuzzedCenter.lng}`,
+        key: `discovery:sa:${state.filters.radiusMiles}:${state.confirmedNeighborhood.fuzzedCenter.lat}:${state.confirmedNeighborhood.fuzzedCenter.lng}`,
+        region: "san_antonio",
       };
     }
     if (state.phase === "blurred_preview" || state.phase === "personalize") {
@@ -173,9 +210,11 @@ export default function MapHomeScreen() {
     blurredPreview?.recommendedZoom,
     isHydrated,
     state.confirmedNeighborhood,
+    state.filters.originMode,
     state.filters.radiusMiles,
+    state.mapRegion,
     state.phase,
-    state.selectedOrigin?.id,
+    state.selectedOrigin,
   ]);
 
   const handleConfirmNeighborhood = useCallback(
@@ -234,6 +273,9 @@ export default function MapHomeScreen() {
   }, [location, moveCamera, resetPrototypeFlow]);
 
   const privacyRing = useMemo(() => {
+    if (isGujaratView) {
+      return null;
+    }
     if (state.phase === "confirm_neighborhood") {
       return location.candidate
         ? {
@@ -254,7 +296,24 @@ export default function MapHomeScreen() {
       };
     }
     return null;
-  }, [location.candidate, state.confirmedNeighborhood, state.isGhostMode, state.phase]);
+  }, [
+    isGujaratView,
+    location.candidate,
+    state.confirmedNeighborhood,
+    state.isGhostMode,
+    state.phase,
+  ]);
+
+  const originAnchor = useMemo(
+    () =>
+      isGujaratView && state.selectedOrigin
+        ? {
+            center: { lat: state.selectedOrigin.lat, lng: state.selectedOrigin.lng },
+            label: state.selectedOrigin.displayName,
+          }
+        : null,
+    [isGujaratView, state.selectedOrigin],
+  );
 
   const activeBlurredPins = useMemo(
     () => (state.phase === "blurred_preview" && blurredPreview ? blurredPreview.households : []),
@@ -278,12 +337,15 @@ export default function MapHomeScreen() {
   return (
     <View style={styles.container}>
       <MapCanvas
+        mapRegion={isGujaratView ? "gujarat" : "san_antonio"}
         cameraTarget={cameraTarget}
         syncCamera={syncCamera}
         privacyRing={privacyRing}
+        originAnchor={originAnchor}
         blurredPins={activeBlurredPins}
         onPressBlurredPin={handlePressBlurredPin}
-        discoveryPins={discoveryMatches}
+        discoveryPins={isGujaratView ? [] : discoveryMatches}
+        gujaratPins={gujaratPins}
         onPressDiscoveryPin={handlePressDiscoveryPin}
         interactiveDragAdjust={
           state.phase === "confirm_neighborhood" && location.status === "snapped"
@@ -293,12 +355,18 @@ export default function MapHomeScreen() {
 
       <SafeAreaView pointerEvents="box-none" style={styles.overlay}>
         <View pointerEvents="box-none" style={styles.topBar}>
-          <View style={styles.badge}>
-            <Text style={styles.badgeTitle}>Second Home · San Antonio</Text>
+          <View style={[styles.badge, isGujaratView && styles.badgeGujarat]}>
+            <Text style={[styles.badgeTitle, isGujaratView && styles.badgeTitleGujarat]}>
+              {isGujaratView ? "Second Home · Gujarat" : "Second Home · San Antonio"}
+            </Text>
             <Text style={styles.badgeSub}>
-              {state.confirmedNeighborhood
-                ? `Near ${state.confirmedNeighborhood.label}`
-                : "Gujarat → San Antonio"}
+              {isGujaratView
+                ? state.filters.originMode === "exact_town" && state.selectedOrigin
+                  ? `Roots: ${state.selectedOrigin.displayName}`
+                  : "All Gujarat hometowns"
+                : state.confirmedNeighborhood
+                  ? `Near ${state.confirmedNeighborhood.label}`
+                  : "Gujarat → San Antonio"}
             </Text>
           </View>
 
@@ -381,14 +449,20 @@ export default function MapHomeScreen() {
           ) : null}
 
           {state.phase === "discovery" ? (
-            <DiscoveryBottomTray
-              households={discoveryMatches}
-              neighborhoodLabel={state.confirmedNeighborhood?.label ?? "San Antonio"}
-              isGhostMode={state.isGhostMode}
-              onSelectHousehold={handlePressDiscoveryPin}
-              onShowAllGujarat={() => updateFilters({ originMode: "all_gujarat", radiusMiles: 25 })}
-              onResetFilters={() => updateFilters(DEFAULT_DISCOVERY_FILTERS)}
-            />
+            <>
+              <MapFlipButton mapRegion={state.mapRegion} onFlip={toggleMapRegion} />
+              <DiscoveryBottomTray
+                households={discoveryMatches}
+                neighborhoodLabel={state.confirmedNeighborhood?.label ?? "San Antonio"}
+                mapRegion={state.mapRegion}
+                isGhostMode={state.isGhostMode}
+                onSelectHousehold={handlePressDiscoveryPin}
+                onShowAllGujarat={() =>
+                  updateFilters({ originMode: "all_gujarat", radiusMiles: 25 })
+                }
+                onResetFilters={() => updateFilters(DEFAULT_DISCOVERY_FILTERS)}
+              />
+            </>
           ) : null}
 
           {state.phase !== "confirm_neighborhood" || location.status === "snapped" ? (
@@ -428,10 +502,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E2E8F0",
   },
+  badgeGujarat: {
+    borderColor: "#FDE68A",
+    backgroundColor: "rgba(255, 251, 235, 0.96)",
+  },
   badgeTitle: {
     fontSize: 14,
     fontWeight: "700",
     color: "#0F172A",
+  },
+  badgeTitleGujarat: {
+    color: "#92400E",
   },
   badgeSub: {
     fontSize: 12,

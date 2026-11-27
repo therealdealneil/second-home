@@ -82,3 +82,7 @@
 5. **Post-Connection Peer Vouching:**
    - 48 hours after connecting, the app surfaces a lightweight prompt: *"Did you connect with [Name]? Vouch that they're genuinely from [Vadodara]."*
    - Confirming increments the user's public **"Vouched by Neighbors"** trust counter.
+6. **Corridor Flip (San Antonio ⇄ Gujarat Map View):**
+   - During Discovery, a floating **"Flip to Gujarat" / "Flip to San Antonio"** button in the bottom-right thumb zone flies the map camera between Greater San Antonio and Gujarat.
+   - In Gujarat view, the San Antonio privacy ring is hidden, an anchor pin marks the user's selected Gujarat hometown, and matched San Antonio neighbors are projected onto their public Gujarat gazetteer coordinates (multi-origin households appear at each distinct member hometown with deterministic radial spread for co-located pins).
+   - The bottom tray adapts to show each neighbor's Gujarat hometown alongside their San Antonio neighborhood and distance; tapping any Gujarat pin opens the same Household Bottom Sheet.

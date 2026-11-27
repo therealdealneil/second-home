@@ -61,6 +61,27 @@ export type MatchedHouseholdPin = PublicHouseholdPin & {
   matchesExactHometown: boolean;
 };
 
+export type GujaratProjectedPin = {
+  pinId: string;
+  householdId: string;
+  displayLabel: string;
+  lifeStage: LifeStage;
+  neighborhoodName: string;
+  isVerifiedLocal: boolean;
+  distanceMeters: number;
+  distanceMiles: number;
+  matchesExactHometown: boolean;
+  hometownName: string;
+  hometownDistrict: GujaratDistrict;
+  lat: number;
+  lng: number;
+  originLat: number;
+  originLng: number;
+  members: readonly PublicHouseholdMember[];
+  totalHouseholdMembers: number;
+  isMultiOriginHousehold: boolean;
+};
+
 export type BlurredPreviewScope = "exact_hometown" | "all_gujarat_fallback";
 
 export type BlurredPreviewResult = {
@@ -440,4 +461,137 @@ export function evaluateBlurredPreviewMatches(params: {
       (item) => item.distanceMiles <= PREVIEW_NEARBY_HIGHLIGHT_MILES,
     ).length,
   };
+}
+
+function hashStringSeed(input: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) / 0xffffffff;
+}
+
+/**
+ * Projects matched San Antonio households onto their Gujarat hometown coordinates
+ * for the "Flip to Gujarat" map view:
+ * - Multi-origin households produce 1 pin per distinct hometown coordinate, grouping
+ *   any members sharing that hometown on the same pin.
+ * - Co-located pins from different households at identical gazetteer coordinates are
+ *   deterministically fanned out in a small radial ring (~260-360 m) so every pin
+ *   remains visible and tappable without jumping across re-renders.
+ */
+export function projectGujaratDiscoveryPins(
+  households: readonly MatchedHouseholdPin[],
+): GujaratProjectedPin[] {
+  const rawPins: GujaratProjectedPin[] = [];
+
+  for (const household of households) {
+    if (household.members.length === 0) {
+      continue;
+    }
+
+    const memberBuckets = new Map<
+      string,
+      {
+        originLat: number;
+        originLng: number;
+        members: PublicHouseholdMember[];
+      }
+    >();
+
+    for (const member of household.members) {
+      if (!LatLngSchema.safeParse({ lat: member.hometownLat, lng: member.hometownLng }).success) {
+        continue;
+      }
+      const coordKey = `${member.hometownLat.toFixed(4)},${member.hometownLng.toFixed(4)}`;
+      const existing = memberBuckets.get(coordKey);
+      if (existing) {
+        existing.members.push(member);
+      } else {
+        memberBuckets.set(coordKey, {
+          originLat: member.hometownLat,
+          originLng: member.hometownLng,
+          members: [member],
+        });
+      }
+    }
+
+    const isMultiOriginHousehold = memberBuckets.size > 1;
+    const totalHouseholdMembers = household.members.length;
+
+    for (const [coordKey, bucket] of memberBuckets) {
+      const leadMember = bucket.members[0];
+      if (!leadMember) {
+        continue;
+      }
+      rawPins.push({
+        pinId: `${household.householdId}:${coordKey}`,
+        householdId: household.householdId,
+        displayLabel: household.displayLabel,
+        lifeStage: household.lifeStage,
+        neighborhoodName: household.neighborhoodName,
+        isVerifiedLocal: household.isVerifiedLocal,
+        distanceMeters: household.distanceMeters,
+        distanceMiles: household.distanceMiles,
+        matchesExactHometown: household.matchesExactHometown,
+        hometownName: leadMember.hometownName,
+        hometownDistrict: leadMember.hometownDistrict,
+        lat: bucket.originLat,
+        lng: bucket.originLng,
+        originLat: bucket.originLat,
+        originLng: bucket.originLng,
+        members: bucket.members,
+        totalHouseholdMembers,
+        isMultiOriginHousehold,
+      });
+    }
+  }
+
+  const locationGroups = new Map<string, GujaratProjectedPin[]>();
+  for (const pin of rawPins) {
+    const coordKey = `${pin.originLat.toFixed(4)},${pin.originLng.toFixed(4)}`;
+    const group = locationGroups.get(coordKey);
+    if (group) {
+      group.push(pin);
+    } else {
+      locationGroups.set(coordKey, [pin]);
+    }
+  }
+
+  const spreadCoordsByPinId = new Map<string, LatLng>();
+  for (const [coordKey, group] of locationGroups) {
+    if (group.length <= 1) {
+      continue;
+    }
+    const sorted = [...group].sort((a, b) => a.pinId.localeCompare(b.pinId));
+    const radiusMeters = sorted.length >= 7 ? 360 : 260;
+    const seedAngleOffset = hashStringSeed(coordKey) * 2 * Math.PI;
+
+    for (let i = 0; i < sorted.length; i++) {
+      const item = sorted[i];
+      if (!item) {
+        continue;
+      }
+      const angle = seedAngleOffset + (i / sorted.length) * 2 * Math.PI;
+      const offset = offsetCoordinate(
+        { lat: item.originLat, lng: item.originLng },
+        radiusMeters,
+        angle,
+      );
+      spreadCoordsByPinId.set(item.pinId, offset);
+    }
+  }
+
+  return rawPins.map((pin) => {
+    const offset = spreadCoordsByPinId.get(pin.pinId);
+    if (!offset) {
+      return pin;
+    }
+    return {
+      ...pin,
+      lat: offset.lat,
+      lng: offset.lng,
+    };
+  });
 }

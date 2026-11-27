@@ -8,6 +8,7 @@ import {
   type AppFlowState,
   type ConfirmedNeighborhood,
   type DiscoveryFilters,
+  type MapRegion,
   type PendingAuthIntent,
   type PersonalizationDraft,
   type ReportReasonCode,
@@ -36,6 +37,8 @@ type AppFlowContextValue = {
   completeMockAuth: () => void;
   completePersonalization: (draft?: PersonalizationDraft) => void;
   updateFilters: (filters: Partial<DiscoveryFilters>) => void;
+  setMapRegion: (region: MapRegion) => void;
+  toggleMapRegion: () => void;
   toggleGhostMode: (enabled?: boolean) => void;
   sendConnectionRequest: (params: {
     userId: string;
@@ -153,6 +156,17 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
     [trackedDispatch],
   );
 
+  const setMapRegion = useCallback(
+    (region: MapRegion) => {
+      trackedDispatch({ type: "SET_MAP_REGION", region });
+    },
+    [trackedDispatch],
+  );
+
+  const toggleMapRegion = useCallback(() => {
+    trackedDispatch({ type: "TOGGLE_MAP_REGION" });
+  }, [trackedDispatch]);
+
   const toggleGhostMode = useCallback(
     (enabled?: boolean) => {
       trackedDispatch({ type: "TOGGLE_GHOST_MODE", enabled });
@@ -223,6 +237,8 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
       completeMockAuth,
       completePersonalization,
       updateFilters,
+      setMapRegion,
+      toggleMapRegion,
       toggleGhostMode,
       sendConnectionRequest,
       acceptMockConnection,
@@ -240,6 +256,8 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
       completeMockAuth,
       completePersonalization,
       updateFilters,
+      setMapRegion,
+      toggleMapRegion,
       toggleGhostMode,
       sendConnectionRequest,
       acceptMockConnection,

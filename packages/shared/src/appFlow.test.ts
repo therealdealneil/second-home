@@ -424,4 +424,48 @@ describe("Flow C social actions, safety blocks, and Ghost Mode", () => {
     const resetState = appFlowReducer(rehydrated, { type: "RESET_FLOW" });
     expect(resetState).toEqual(INITIAL_APP_FLOW_STATE);
   });
+
+  it("supports toggling mapRegion only in discovery and resets to san_antonio on hydrate/reset", () => {
+    // Outside discovery, TOGGLE_MAP_REGION and SET_MAP_REGION stay on san_antonio
+    expect(appFlowReducer(INITIAL_APP_FLOW_STATE, { type: "TOGGLE_MAP_REGION" }).mapRegion).toBe(
+      "san_antonio",
+    );
+    expect(
+      appFlowReducer(INITIAL_APP_FLOW_STATE, { type: "SET_MAP_REGION", region: "gujarat" })
+        .mapRegion,
+    ).toBe("san_antonio");
+
+    const discoveryState: AppFlowState = {
+      ...INITIAL_APP_FLOW_STATE,
+      phase: "discovery",
+      confirmedNeighborhood: MEDICAL_CENTER,
+      selectedOrigin: AHMEDABAD,
+      isAuthenticated: true,
+      hasCompletedPersonalization: true,
+    };
+
+    const gujaratState = appFlowReducer(discoveryState, { type: "TOGGLE_MAP_REGION" });
+    expect(gujaratState.mapRegion).toBe("gujarat");
+
+    const backToSanAntonio = appFlowReducer(gujaratState, { type: "TOGGLE_MAP_REGION" });
+    expect(backToSanAntonio.mapRegion).toBe("san_antonio");
+
+    const explicitGujarat = appFlowReducer(discoveryState, {
+      type: "SET_MAP_REGION",
+      region: "gujarat",
+    });
+    expect(explicitGujarat.mapRegion).toBe("gujarat");
+
+    // Cold hydration always opens on San Antonio
+    const parsed = parsePersistedFlowSnapshot(serializeFlowSnapshot(explicitGujarat));
+    expect(parsed).not.toBeNull();
+    const hydrated = appFlowReducer(explicitGujarat, {
+      type: "HYDRATE_STATE",
+      payload: parsed!,
+    });
+    expect(hydrated.mapRegion).toBe("san_antonio");
+
+    // RESET_FLOW resets to san_antonio
+    expect(appFlowReducer(explicitGujarat, { type: "RESET_FLOW" }).mapRegion).toBe("san_antonio");
+  });
 });

@@ -10,7 +10,9 @@ import {
   haversineDistanceMeters,
   inferSanAntonioNeighborhood,
   isPointInGreaterSanAntonio,
+  projectGujaratDiscoveryPins,
   validateCapturedGpsFix,
+  type MatchedHouseholdPin,
   type PublicHouseholdPin,
 } from "./spatial";
 
@@ -286,5 +288,211 @@ describe("evaluateBlurredPreviewMatches with Dynamic Zoom Fallback", () => {
     expect(res.exactMatchCount).toBe(0);
     expect(res.withinTwoMilesCount).toBe(0);
     expect(res.households).toHaveLength(0);
+  });
+});
+
+describe("projectGujaratDiscoveryPins", () => {
+  function makeMatchedPin(
+    householdId: string,
+    members: PublicHouseholdPin["members"],
+  ): MatchedHouseholdPin {
+    return {
+      householdId,
+      displayLabel: `Household ${householdId}`,
+      lifeStage: "couple",
+      neighborhoodName: "Medical Center",
+      isVerifiedLocal: true,
+      publicLat: 29.5124,
+      publicLng: -98.5742,
+      distanceMeters: 1609,
+      distanceMiles: 1,
+      matchesExactHometown: true,
+      members,
+    };
+  }
+
+  it("projects single-origin households at exact hometown coords and splits multi-origin households", () => {
+    const single = makeMatchedPin("hh-single", [
+      {
+        userId: "u1",
+        firstName: "Aarav",
+        avatarUrl: null,
+        ageBracket: "20s",
+        hometownName: "Satellite, Ahmedabad",
+        hometownDistrict: "Ahmedabad",
+        hometownLat: 23.03,
+        hometownLng: 72.5178,
+        vouchCount: 1,
+        interests: ["Cricket"],
+      },
+    ]);
+
+    const multiOrigin = makeMatchedPin("hh-multi", [
+      {
+        userId: "u2",
+        firstName: "Rohan",
+        avatarUrl: null,
+        ageBracket: "30s",
+        hometownName: "Navrangpura, Ahmedabad",
+        hometownDistrict: "Ahmedabad",
+        hometownLat: 23.0365,
+        hometownLng: 72.5611,
+        vouchCount: 4,
+        interests: ["Cricket"],
+      },
+      {
+        userId: "u3",
+        firstName: "Priya",
+        avatarUrl: null,
+        ageBracket: "30s",
+        hometownName: "Alkapuri, Vadodara",
+        hometownDistrict: "Vadodara",
+        hometownLat: 22.3119,
+        hometownLng: 73.1723,
+        vouchCount: 3,
+        interests: ["Parenting"],
+      },
+    ]);
+
+    const projected = projectGujaratDiscoveryPins([single, multiOrigin]);
+    expect(projected).toHaveLength(3);
+
+    const singlePin = projected.find((p) => p.householdId === "hh-single")!;
+    expect(singlePin.lat).toBe(23.03);
+    expect(singlePin.lng).toBe(72.5178);
+    expect(singlePin.isMultiOriginHousehold).toBe(false);
+    expect(singlePin.totalHouseholdMembers).toBe(1);
+
+    const multiPins = projected.filter((p) => p.householdId === "hh-multi");
+    expect(multiPins).toHaveLength(2);
+    expect(multiPins.every((p) => p.isMultiOriginHousehold)).toBe(true);
+    expect(multiPins.every((p) => p.totalHouseholdMembers === 2)).toBe(true);
+    expect(multiPins.map((p) => p.hometownDistrict).sort()).toEqual(["Ahmedabad", "Vadodara"]);
+    expect(multiPins[0]?.members).toHaveLength(1);
+    expect(multiPins[1]?.members).toHaveLength(1);
+  });
+
+  it("groups same-hometown spouses onto 1 pin and deterministically spreads co-located households", () => {
+    const coupleSameHometown = makeMatchedPin("hh-couple", [
+      {
+        userId: "u1",
+        firstName: "Dev",
+        avatarUrl: null,
+        ageBracket: "30s",
+        hometownName: "Navrangpura, Ahmedabad",
+        hometownDistrict: "Ahmedabad",
+        hometownLat: 23.0365,
+        hometownLng: 72.5611,
+        vouchCount: 2,
+        interests: [],
+      },
+      {
+        userId: "u2",
+        firstName: "Meera",
+        avatarUrl: null,
+        ageBracket: "30s",
+        hometownName: "Navrangpura, Ahmedabad",
+        hometownDistrict: "Ahmedabad",
+        hometownLat: 23.0365,
+        hometownLng: 72.5611,
+        vouchCount: 2,
+        interests: [],
+      },
+    ]);
+
+    const neighborSameHometown = makeMatchedPin("hh-neighbor", [
+      {
+        userId: "u3",
+        firstName: "Rohan",
+        avatarUrl: null,
+        ageBracket: "30s",
+        hometownName: "Navrangpura, Ahmedabad",
+        hometownDistrict: "Ahmedabad",
+        hometownLat: 23.0365,
+        hometownLng: 72.5611,
+        vouchCount: 4,
+        interests: [],
+      },
+    ]);
+
+    const firstPass = projectGujaratDiscoveryPins([coupleSameHometown, neighborSameHometown]);
+    const secondPass = projectGujaratDiscoveryPins([coupleSameHometown, neighborSameHometown]);
+
+    // 1 grouped pin for couple + 1 pin for neighbor
+    expect(firstPass).toHaveLength(2);
+    expect(firstPass[0]?.members).toHaveLength(2);
+    expect(firstPass[0]?.isMultiOriginHousehold).toBe(false);
+
+    // Deterministic spread across calls
+    expect(firstPass).toEqual(secondPass);
+
+    // Pins are spread apart (~260 m from center -> > 200 m apart) rather than stacked identically
+    const separationMeters = haversineDistanceMeters(
+      { lat: firstPass[0]!.lat, lng: firstPass[0]!.lng },
+      { lat: firstPass[1]!.lat, lng: firstPass[1]!.lng },
+    );
+    expect(separationMeters).toBeGreaterThan(200);
+    expect(separationMeters).toBeLessThan(600);
+  });
+
+  it("skips empty-member households and invalid coordinates, and uses 360 m ring for 7+ co-located pins", () => {
+    const emptyHousehold = makeMatchedPin("hh-empty", []);
+    const invalidCoordHousehold = makeMatchedPin("hh-invalid", [
+      {
+        userId: "u-nan",
+        firstName: "Invalid",
+        avatarUrl: null,
+        ageBracket: "30s",
+        hometownName: "Unknown",
+        hometownDistrict: "Ahmedabad",
+        hometownLat: Number.NaN,
+        hometownLng: 72.5611,
+        vouchCount: 0,
+        interests: [],
+      },
+      {
+        userId: "u-oob",
+        firstName: "OutOfBounds",
+        avatarUrl: null,
+        ageBracket: "30s",
+        hometownName: "Unknown",
+        hometownDistrict: "Ahmedabad",
+        hometownLat: 120,
+        hometownLng: 72.5611,
+        vouchCount: 0,
+        interests: [],
+      },
+    ]);
+
+    const eightColocated = Array.from({ length: 8 }, (_, idx) =>
+      makeMatchedPin(`hh-coloc-${idx}`, [
+        {
+          userId: `u-coloc-${idx}`,
+          firstName: `User${idx}`,
+          avatarUrl: null,
+          ageBracket: "30s",
+          hometownName: "Alkapuri, Vadodara",
+          hometownDistrict: "Vadodara",
+          hometownLat: 22.3119,
+          hometownLng: 73.1723,
+          vouchCount: 1,
+          interests: [],
+        },
+      ]),
+    );
+
+    const projected = projectGujaratDiscoveryPins([
+      emptyHousehold,
+      invalidCoordHousehold,
+      ...eightColocated,
+    ]);
+    expect(projected).toHaveLength(8);
+    for (const pin of projected) {
+      const distFromOrigin = haversineDistanceMeters(
+        { lat: pin.originLat, lng: pin.originLng },
+        { lat: pin.lat, lng: pin.lng },
+      );
+      expect(distFromOrigin).toBeCloseTo(360, -1);
+    }
   });
 });

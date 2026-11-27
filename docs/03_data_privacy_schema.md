@@ -140,7 +140,11 @@ RETURNS TABLE (
 LANGUAGE sql STABLE SECURITY DEFINER
 AS $$
   WITH origin_point AS (
-    SELECT ST_SetSRID(ST_MakePoint(p_hometown_lng, p_hometown_lat), 4326)::geography AS geog
+    SELECT CASE
+      WHEN p_hometown_lng IS NOT NULL AND p_hometown_lat IS NOT NULL
+        THEN ST_SetSRID(ST_MakePoint(p_hometown_lng, p_hometown_lat), 4326)::geography
+      ELSE NULL
+    END AS geog
   ),
   dest_point AS (
     SELECT ST_SetSRID(ST_MakePoint(p_current_lng, p_current_lat), 4326)::geography AS geog
@@ -162,6 +166,8 @@ AS $$
         'age_bracket', u.age_bracket,
         'hometown_name', u.hometown_name,
         'hometown_district', u.hometown_district,
+        'hometown_lat', ST_Y(u.hometown_geog::geometry),
+        'hometown_lng', ST_X(u.hometown_geog::geometry),
         'vouch_count', u.vouch_count,
         'interests', u.interests
       )
@@ -188,7 +194,13 @@ AS $$
       SELECT 1 FROM users match_u
       WHERE match_u.household_id = h.id
         AND match_u.status = 'active'
-        AND ST_DWithin(match_u.hometown_geog, o.geog, LEAST(GREATEST(COALESCE(p_hometown_radius_meters, 0), 0), 80467))
+        AND (
+          p_hometown_radius_meters IS NULL
+          OR (
+            o.geog IS NOT NULL
+            AND ST_DWithin(match_u.hometown_geog, o.geog, LEAST(GREATEST(p_hometown_radius_meters, 0), 80467))
+          )
+        )
         AND (p_age_brackets IS NULL OR CARDINALITY(p_age_brackets) = 0 OR match_u.age_bracket = ANY(p_age_brackets))
     )
     AND NOT EXISTS (

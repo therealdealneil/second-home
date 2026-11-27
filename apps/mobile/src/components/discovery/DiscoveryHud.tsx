@@ -3,10 +3,12 @@ import {
   LIFE_STAGE_LABELS,
   type DiscoveryFilters,
   type GujaratLocation,
+  type MapRegion,
   type MatchedHouseholdPin,
 } from "@second-home/shared";
 import * as Haptics from "expo-haptics";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 type DiscoveryTopControlsProps = {
   filters: DiscoveryFilters;
@@ -88,9 +90,55 @@ export function DiscoveryTopControls({
   );
 }
 
+type MapFlipButtonProps = {
+  mapRegion: MapRegion;
+  onFlip: () => void;
+};
+
+export function MapFlipButton({ mapRegion, onFlip }: MapFlipButtonProps) {
+  const [spinAnim] = useState(() => new Animated.Value(0));
+  const isGujarat = mapRegion === "gujarat";
+
+  function handlePress() {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    spinAnim.setValue(0);
+    Animated.timing(spinAnim, {
+      toValue: 1,
+      duration: 320,
+      useNativeDriver: true,
+    }).start();
+    onFlip();
+  }
+
+  const rotate = spinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "180deg"],
+  });
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={isGujarat ? "Flip map to San Antonio" : "Flip map to Gujarat"}
+      style={[
+        styles.flipButton,
+        isGujarat ? styles.flipButtonSanAntonio : styles.flipButtonGujarat,
+      ]}
+      onPress={handlePress}
+    >
+      <Animated.View style={{ transform: [{ rotate }] }}>
+        <Ionicons name="swap-horizontal" size={16} color="#FFFFFF" />
+      </Animated.View>
+      <Text style={styles.flipButtonText}>
+        {isGujarat ? "Flip to San Antonio" : "Flip to Gujarat"}
+      </Text>
+    </Pressable>
+  );
+}
+
 type DiscoveryBottomTrayProps = {
   households: readonly MatchedHouseholdPin[];
   neighborhoodLabel: string;
+  mapRegion: MapRegion;
   isGhostMode: boolean;
   onSelectHousehold: (householdId: string) => void;
   onShowAllGujarat: () => void;
@@ -100,16 +148,21 @@ type DiscoveryBottomTrayProps = {
 export function DiscoveryBottomTray({
   households,
   neighborhoodLabel,
+  mapRegion,
   isGhostMode,
   onSelectHousehold,
   onShowAllGujarat,
   onResetFilters,
 }: DiscoveryBottomTrayProps) {
+  const isGujarat = mapRegion === "gujarat";
+
   return (
     <View style={styles.trayCard}>
       <View style={styles.trayHeader}>
         <Text style={styles.trayTitle}>
-          {households.length} household{households.length !== 1 ? "s" : ""} near {neighborhoodLabel}
+          {isGujarat
+            ? `${households.length} San Antonio neighbor${households.length !== 1 ? "s" : ""} in Gujarat`
+            : `${households.length} household${households.length !== 1 ? "s" : ""} near ${neighborhoodLabel}`}
         </Text>
         {isGhostMode ? <Text style={styles.ghostHint}>Pin paused</Text> : null}
       </View>
@@ -138,6 +191,9 @@ export function DiscoveryBottomTray({
             const originsSummary = Array.from(
               new Set(item.members.map((m) => m.hometownDistrict)),
             ).join(" & ");
+            const hometownNamesSummary = Array.from(
+              new Set(item.members.map((m) => m.hometownName.replace(/, Gujarat$/, ""))),
+            ).join(" · ");
             return (
               <Pressable
                 key={item.householdId}
@@ -155,13 +211,26 @@ export function DiscoveryBottomTray({
                     <Ionicons name="shield-checkmark" size={14} color="#0F766E" />
                   ) : null}
                 </View>
-                <Text style={styles.householdMeta} numberOfLines={1}>
-                  {LIFE_STAGE_LABELS[item.lifeStage]} · ~{item.distanceMiles.toFixed(1)} mi
-                </Text>
-                <Text style={styles.householdOrigins} numberOfLines={1}>
-                  From {originsSummary} · {item.members.length} member
-                  {item.members.length !== 1 ? "s" : ""}
-                </Text>
+                {isGujarat ? (
+                  <>
+                    <Text style={styles.householdGujaratMeta} numberOfLines={1}>
+                      {hometownNamesSummary}
+                    </Text>
+                    <Text style={styles.householdOrigins} numberOfLines={1}>
+                      Near {item.neighborhoodName} · ~{item.distanceMiles.toFixed(1)} mi
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.householdMeta} numberOfLines={1}>
+                      {LIFE_STAGE_LABELS[item.lifeStage]} · ~{item.distanceMiles.toFixed(1)} mi
+                    </Text>
+                    <Text style={styles.householdOrigins} numberOfLines={1}>
+                      From {originsSummary} · {item.members.length} member
+                      {item.members.length !== 1 ? "s" : ""}
+                    </Text>
+                  </>
+                )}
               </Pressable>
             );
           })}
@@ -272,6 +341,38 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     color: "#0F766E",
+  },
+  householdGujaratMeta: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#B45309",
+  },
+  flipButton: {
+    alignSelf: "flex-end",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.3)",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
+  },
+  flipButtonGujarat: {
+    backgroundColor: "#B45309",
+  },
+  flipButtonSanAntonio: {
+    backgroundColor: "#0F766E",
+  },
+  flipButtonText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   householdOrigins: {
     fontSize: 11,
