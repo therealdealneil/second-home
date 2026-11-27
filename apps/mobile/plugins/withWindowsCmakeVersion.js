@@ -1,5 +1,10 @@
+const path = require("node:path");
 const { createRunOncePlugin, withProjectBuildGradle } = require("expo/config-plugins");
-const { mergeContents } = require("@expo/config-plugins/build/utils/generateCode");
+const { mergeContents } = require(
+  require.resolve("@expo/config-plugins/build/utils/generateCode", {
+    paths: [path.dirname(require.resolve("expo/config-plugins"))],
+  }),
+);
 
 const PLUGIN_NAME = "withWindowsCmakeVersion";
 const DEFAULT_CMAKE_VERSION = "3.31.6";
