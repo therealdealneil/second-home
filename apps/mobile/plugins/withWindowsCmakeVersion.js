@@ -1,17 +1,18 @@
-const { withProjectBuildGradle } = require("expo/config-plugins");
+const { createRunOncePlugin, withProjectBuildGradle } = require("expo/config-plugins");
+const { mergeContents } = require("@expo/config-plugins/build/utils/generateCode");
 
-const TAG = "// @generated withWindowsCmakeVersion";
-const CMAKE_VERSION = "3.31.6";
+const PLUGIN_NAME = "withWindowsCmakeVersion";
+const DEFAULT_CMAKE_VERSION = "3.31.6";
 
-const GRADLE_SNIPPET = `${TAG}
-if (org.gradle.internal.os.OperatingSystem.current().isWindows()) {
+const GRADLE_SNIPPET = `if (System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win")) {
   subprojects { sub ->
     def configureWindowsCmake = {
       def androidComponents = sub.extensions.findByName("androidComponents")
       if (androidComponents != null) {
         androidComponents.finalizeDsl { extension ->
           if (sub.name == "app" || extension.externalNativeBuild?.cmake?.path != null) {
-            extension.externalNativeBuild.cmake.version = "${CMAKE_VERSION}"
+            def windowsCmakeVersion = sub.findProperty("android.windowsCmakeVersion") ?: "${DEFAULT_CMAKE_VERSION}"
+            extension.externalNativeBuild.cmake.version = windowsCmakeVersion.toString()
           }
         }
       }
@@ -19,8 +20,18 @@ if (org.gradle.internal.os.OperatingSystem.current().isWindows()) {
     sub.pluginManager.withPlugin("com.android.library") { configureWindowsCmake() }
     sub.pluginManager.withPlugin("com.android.application") { configureWindowsCmake() }
   }
+}`;
+
+function applyWindowsCmakeToBuildGradle(contents) {
+  return mergeContents({
+    tag: PLUGIN_NAME,
+    src: contents,
+    newSrc: GRADLE_SNIPPET,
+    anchor: /apply plugin: "expo-root-project"/,
+    offset: 0,
+    comment: "//",
+  }).contents;
 }
-// @generated end withWindowsCmakeVersion`;
 
 /**
  * On Windows, CMake 3.22.1 bundles Ninja 1.10.2 which fails on pnpm store paths
@@ -33,19 +44,12 @@ function withWindowsCmakeVersion(config) {
     if (exportedConfig.modResults.language !== "groovy") {
       return exportedConfig;
     }
-    const contents = exportedConfig.modResults.contents;
-    if (contents.includes(TAG)) {
-      return exportedConfig;
-    }
-    const anchor = 'apply plugin: "expo-root-project"';
-    if (contents.includes(anchor)) {
-      exportedConfig.modResults.contents = contents.replace(
-        anchor,
-        `${GRADLE_SNIPPET}\n\n${anchor}`,
-      );
-    }
+    exportedConfig.modResults.contents = applyWindowsCmakeToBuildGradle(
+      exportedConfig.modResults.contents,
+    );
     return exportedConfig;
   });
 }
 
-module.exports = withWindowsCmakeVersion;
+module.exports = createRunOncePlugin(withWindowsCmakeVersion, PLUGIN_NAME, "1.0.0");
+module.exports.applyWindowsCmakeToBuildGradle = applyWindowsCmakeToBuildGradle;
