@@ -504,7 +504,7 @@ export function projectGujaratDiscoveryPins(
       if (!LatLngSchema.safeParse({ lat: member.hometownLat, lng: member.hometownLng }).success) {
         continue;
       }
-      const coordKey = `${member.hometownLat.toFixed(4)},${member.hometownLng.toFixed(4)}`;
+      const coordKey = `${member.hometownLat + 0},${member.hometownLng + 0}`;
       const existing = memberBuckets.get(coordKey);
       if (existing) {
         existing.members.push(member);
@@ -550,7 +550,7 @@ export function projectGujaratDiscoveryPins(
 
   const locationGroups = new Map<string, GujaratProjectedPin[]>();
   for (const pin of rawPins) {
-    const coordKey = `${pin.originLat.toFixed(4)},${pin.originLng.toFixed(4)}`;
+    const coordKey = `${pin.originLat + 0},${pin.originLng + 0}`;
     const group = locationGroups.get(coordKey);
     if (group) {
       group.push(pin);

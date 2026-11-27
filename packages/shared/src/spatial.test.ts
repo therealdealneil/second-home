@@ -495,4 +495,39 @@ describe("projectGujaratDiscoveryPins", () => {
       expect(distFromOrigin).toBeCloseTo(360, -1);
     }
   });
+
+  it("keeps distinct coordinates separate even when they round to the same 4 decimal places", () => {
+    const closeOrigins = makeMatchedPin("hh-close", [
+      {
+        userId: "u-close-1",
+        firstName: "Asha",
+        avatarUrl: null,
+        ageBracket: "30s",
+        hometownName: "Navrangpura, Ahmedabad",
+        hometownDistrict: "Ahmedabad",
+        hometownLat: 23.0365,
+        hometownLng: 72.5611,
+        vouchCount: 1,
+        interests: [],
+      },
+      {
+        userId: "u-close-2",
+        firstName: "Vikram",
+        avatarUrl: null,
+        ageBracket: "30s",
+        hometownName: "Navrangpura West, Ahmedabad",
+        hometownDistrict: "Ahmedabad",
+        hometownLat: 23.03654,
+        hometownLng: 72.5611,
+        vouchCount: 1,
+        interests: [],
+      },
+    ]);
+
+    const projected = projectGujaratDiscoveryPins([closeOrigins]);
+    expect(projected).toHaveLength(2);
+    expect(projected[0]?.isMultiOriginHousehold).toBe(true);
+    expect(projected[1]?.isMultiOriginHousehold).toBe(true);
+    expect(projected.map((p) => p.originLat).sort()).toEqual([23.0365, 23.03654]);
+  });
 });
