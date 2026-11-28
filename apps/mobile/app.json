@@ -10,6 +10,7 @@
     "ios": {
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.secondhome.app",
+      "usesAppleSignIn": true,
       "associatedDomains": ["applinks:secondhome.app", "applinks:www.secondhome.app"]
     },
     "android": {
@@ -72,7 +73,10 @@
       ],
       "expo-image",
       "expo-font",
-      "./plugins/withWindowsCmakeVersion"
+      "./plugins/withWindowsCmakeVersion",
+      "expo-secure-store",
+      "expo-apple-authentication",
+      "@react-native-google-signin/google-signin"
     ],
     "experiments": {
       "typedRoutes": true

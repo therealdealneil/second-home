@@ -13,6 +13,7 @@ import {
   type PersonalizationDraft,
   type ReportReasonCode,
 } from "@second-home/shared";
+import type { Session } from "@supabase/supabase-js";
 import { useRouter } from "expo-router";
 import {
   createContext,
@@ -25,16 +26,20 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { fetchCurrentAccountStatus, signOutAuthProviders, type ActivationStatus } from "@/lib/auth";
+import { getSupabaseClient } from "@/lib/supabase";
 
 const STORAGE_KEY = "second_home.app_flow.v1";
 
 type AppFlowContextValue = {
   state: AppFlowState;
   isHydrated: boolean;
+  authSession: Session | null;
+  accountStatus: ActivationStatus | null;
   dispatch: React.Dispatch<AppFlowAction>;
   confirmNeighborhood: (neighborhood: ConfirmedNeighborhood) => void;
   openAuthForIntent: (intent: PendingAuthIntent) => void;
-  completeMockAuth: () => void;
+  completeAuth: (status?: ActivationStatus) => void;
   completePersonalization: (draft?: PersonalizationDraft) => void;
   updateFilters: (filters: Partial<DiscoveryFilters>) => void;
   setMapRegion: (region: MapRegion) => void;
@@ -59,7 +64,46 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appFlowReducer, INITIAL_APP_FLOW_STATE);
   const [isHydrated, setIsHydrated] = useState(false);
   const [canPersist, setCanPersist] = useState(false);
+  const [authSession, setAuthSession] = useState<Session | null>(null);
+  const [accountStatus, setAccountStatus] = useState<ActivationStatus | null>(null);
   const userMutatedBeforeHydrationRef = useRef(false);
+
+  useEffect(() => {
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function syncSession(session: Session | null) {
+      if (cancelled) {
+        return;
+      }
+      setAuthSession(session);
+      if (!session?.user) {
+        setAccountStatus(null);
+        return;
+      }
+      const nextStatus = await fetchCurrentAccountStatus(session.user.id);
+      if (!cancelled) {
+        setAccountStatus(nextStatus);
+      }
+    }
+
+    void supabase.auth.getSession().then(({ data }) => syncSession(data.session));
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      void syncSession(session);
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -138,9 +182,15 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
     [router, trackedDispatch],
   );
 
-  const completeMockAuth = useCallback(() => {
-    trackedDispatch({ type: "COMPLETE_MOCK_AUTH" });
-  }, [trackedDispatch]);
+  const completeAuth = useCallback(
+    (status?: ActivationStatus) => {
+      if (status) {
+        setAccountStatus(status);
+      }
+      trackedDispatch({ type: "COMPLETE_AUTH" });
+    },
+    [trackedDispatch],
+  );
 
   const completePersonalization = useCallback(
     (draft?: PersonalizationDraft) => {
@@ -223,6 +273,9 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
 
   const resetPrototypeFlow = useCallback(() => {
     setCanPersist(true);
+    setAuthSession(null);
+    setAccountStatus(null);
+    void signOutAuthProviders();
     trackedDispatch({ type: "RESET_FLOW" });
     void AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
   }, [trackedDispatch]);
@@ -231,10 +284,12 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
     () => ({
       state,
       isHydrated,
+      authSession,
+      accountStatus,
       dispatch: trackedDispatch,
       confirmNeighborhood,
       openAuthForIntent,
-      completeMockAuth,
+      completeAuth,
       completePersonalization,
       updateFilters,
       setMapRegion,
@@ -250,10 +305,12 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
     [
       state,
       isHydrated,
+      authSession,
+      accountStatus,
       trackedDispatch,
       confirmNeighborhood,
       openAuthForIntent,
-      completeMockAuth,
+      completeAuth,
       completePersonalization,
       updateFilters,
       setMapRegion,

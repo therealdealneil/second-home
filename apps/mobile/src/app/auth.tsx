@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -12,38 +13,130 @@ import {
   TextInput,
   View,
 } from "react-native";
+import {
+  activateVerifiedAccount,
+  isAppleSignInAvailable,
+  isAuthCanceledError,
+  sendTwilioPhoneOtp,
+  signInWithApple,
+  signInWithGoogle,
+  verifyTwilioPhoneOtpAndActivate,
+} from "@/lib/auth";
 import { dismissOrReturnHome } from "@/lib/navigation";
+import { isSupabaseConfigured } from "@/lib/supabase";
 import { useAppFlow } from "@/state/AppFlowContext";
+
+type AuthStep = "provider" | "phone_otp";
 
 export default function SoftAuthSheet() {
   const router = useRouter();
-  const { state, completeMockAuth } = useAppFlow();
-  const [provider, setProvider] = useState<"apple" | "google" | null>(null);
+  const { state, authSession, completeAuth } = useAppFlow();
+
+  const [manualStep, setManualStep] = useState<AuthStep | null>(null);
+  const hasUnverifiedSession = Boolean(authSession?.user && !authSession.user.phone_confirmed_at);
+  const step: AuthStep = manualStep ?? (hasUnverifiedSession ? "phone_otp" : "provider");
+  const [appleAvailable, setAppleAvailable] = useState(Platform.OS === "ios");
+  const [loadingAction, setLoadingAction] = useState<
+    "apple" | "google" | "send_otp" | "verify_otp" | null
+  >(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+
   // Kept strictly in ephemeral local state — never persisted in AppFlowState/AsyncStorage
-  const [phoneInput, setPhoneInput] = useState("+1 (210) 555-0199");
+  const [phoneInput, setPhoneInput] = useState("");
+  const [sentPhoneE164, setSentPhoneE164] = useState<string | null>(null);
   const [otpCode, setOtpCode] = useState("");
-  const [otpError, setOtpError] = useState<string | null>(null);
 
-  function handleSelectProvider(selected: "apple" | "google") {
+  useEffect(() => {
+    let cancelled = false;
+    void isAppleSignInAvailable().then((available) => {
+      if (!cancelled) {
+        setAppleAvailable(available);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleAppleSignIn() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setProvider(selected);
-    setOtpError(null);
+    setAuthError(null);
+    setLoadingAction("apple");
+    try {
+      const { user } = await signInWithApple();
+      if (user.phone_confirmed_at) {
+        const result = await activateVerifiedAccount();
+        completeAuth(result.status);
+        dismissOrReturnHome(router);
+        return;
+      }
+      setManualStep("phone_otp");
+    } catch (error) {
+      if (!isAuthCanceledError(error)) {
+        setAuthError(error instanceof Error ? error.message : "Unable to sign in with Apple.");
+      }
+    } finally {
+      setLoadingAction(null);
+    }
   }
 
-  function handleVerifyOtp() {
-    const digits = phoneInput.replace(/\D/g, "");
-    if (digits.length < 10 || digits.length > 15) {
-      setOtpError("Enter a valid 10-15 digit phone number for WhatsApp handoffs.");
-      return;
+  async function handleGoogleSignIn() {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setAuthError(null);
+    setLoadingAction("google");
+    try {
+      const { user } = await signInWithGoogle();
+      if (user.phone_confirmed_at) {
+        const result = await activateVerifiedAccount();
+        completeAuth(result.status);
+        dismissOrReturnHome(router);
+        return;
+      }
+      setManualStep("phone_otp");
+    } catch (error) {
+      if (!isAuthCanceledError(error)) {
+        setAuthError(error instanceof Error ? error.message : "Unable to sign in with Google.");
+      }
+    } finally {
+      setLoadingAction(null);
     }
-    if (otpCode.trim().length !== 6) {
-      setOtpError("Enter the 6-digit SMS code (demo: 123456).");
-      return;
-    }
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    completeMockAuth();
-    dismissOrReturnHome(router);
   }
+
+  async function handleSendOtp() {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setAuthError(null);
+    setLoadingAction("send_otp");
+    try {
+      const normalized = await sendTwilioPhoneOtp(phoneInput);
+      setSentPhoneE164(normalized);
+      setOtpCode("");
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Unable to send verification code.");
+    } finally {
+      setLoadingAction(null);
+    }
+  }
+
+  async function handleVerifyOtp() {
+    setAuthError(null);
+    setLoadingAction("verify_otp");
+    try {
+      const result = await verifyTwilioPhoneOtpAndActivate({
+        rawPhone: sentPhoneE164 ?? phoneInput,
+        otpCode,
+      });
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      completeAuth(result.status);
+      dismissOrReturnHome(router);
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Unable to verify SMS code.");
+    } finally {
+      setLoadingAction(null);
+    }
+  }
+
+  const isBusy = loadingAction !== null;
+  const supabaseReady = isSupabaseConfigured();
 
   return (
     <KeyboardAvoidingView
@@ -55,15 +148,23 @@ export default function SoftAuthSheet() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.eyebrow}>SOFT AUTH WALL · PROTOTYPE</Text>
+        <Text style={styles.eyebrow}>VERIFIED COMMUNITY ACCESS</Text>
         <Text style={styles.title}>
-          {provider ? "Verify your WhatsApp number" : "Unlock nearby neighbors"}
+          {step === "phone_otp" ? "Verify your WhatsApp number" : "Unlock nearby neighbors"}
         </Text>
         <Text style={styles.body}>
-          {provider
+          {step === "phone_otp"
             ? "SMS OTP lets neighbors connect with you via 1-tap WhatsApp handoff. Your number stays private until you mutually accept."
             : "Sign in in 1 tap to unlock full household profiles, send introductions, and connect on WhatsApp."}
         </Text>
+
+        {!supabaseReady ? (
+          <View style={styles.banner}>
+            <Text style={styles.bannerText}>
+              Supabase Auth environment variables are not configured in this build.
+            </Text>
+          </View>
+        ) : null}
 
         {state.pendingInviteCode ? (
           <View style={styles.banner}>
@@ -73,17 +174,43 @@ export default function SoftAuthSheet() {
           </View>
         ) : null}
 
-        {!provider ? (
+        {step === "provider" ? (
           <View style={styles.actions}>
-            <Pressable style={styles.appleButton} onPress={() => handleSelectProvider("apple")}>
-              <Ionicons name="logo-apple" size={18} color="#FFFFFF" />
-              <Text style={styles.appleButtonText}>Continue with Apple</Text>
-            </Pressable>
-            <Pressable style={styles.googleButton} onPress={() => handleSelectProvider("google")}>
-              <Ionicons name="logo-google" size={16} color="#0F172A" />
+            {appleAvailable ? (
+              <Pressable
+                style={[styles.appleButton, isBusy && styles.buttonDisabled]}
+                disabled={isBusy}
+                onPress={() => void handleAppleSignIn()}
+              >
+                {loadingAction === "apple" ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Ionicons name="logo-apple" size={18} color="#FFFFFF" />
+                )}
+                <Text style={styles.appleButtonText}>Continue with Apple</Text>
+              </Pressable>
+            ) : null}
+
+            <Pressable
+              style={[styles.googleButton, isBusy && styles.buttonDisabled]}
+              disabled={isBusy}
+              onPress={() => void handleGoogleSignIn()}
+            >
+              {loadingAction === "google" ? (
+                <ActivityIndicator size="small" color="#0F172A" />
+              ) : (
+                <Ionicons name="logo-google" size={16} color="#0F172A" />
+              )}
               <Text style={styles.googleButtonText}>Continue with Google</Text>
             </Pressable>
-            <Pressable style={styles.secondaryButton} onPress={() => dismissOrReturnHome(router)}>
+
+            {authError ? <Text style={styles.errorText}>{authError}</Text> : null}
+
+            <Pressable
+              style={styles.secondaryButton}
+              disabled={isBusy}
+              onPress={() => dismissOrReturnHome(router)}
+            >
               <Text style={styles.secondaryButtonText}>Back to Map Preview</Text>
             </Pressable>
           </View>
@@ -95,43 +222,83 @@ export default function SoftAuthSheet() {
               value={phoneInput}
               onChangeText={(txt) => {
                 setPhoneInput(txt);
-                setOtpError(null);
+                setAuthError(null);
+                if (sentPhoneE164) {
+                  setSentPhoneE164(null);
+                }
               }}
               keyboardType="phone-pad"
+              textContentType="telephoneNumber"
+              autoComplete="tel"
+              editable={!isBusy}
               placeholder="+1 (210) 555-0199"
               placeholderTextColor="#94A3B8"
             />
 
-            <View style={styles.otpHeader}>
-              <Text style={styles.inputLabel}>6-Digit SMS Code</Text>
+            {!sentPhoneE164 ? (
               <Pressable
-                onPress={() => {
-                  setOtpCode("123456");
-                  setOtpError(null);
-                }}
+                style={[styles.primaryButton, isBusy && styles.buttonDisabled]}
+                disabled={isBusy}
+                onPress={() => void handleSendOtp()}
               >
-                <Text style={styles.demoFill}>Fill Demo (123456)</Text>
+                {loadingAction === "send_otp" ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Send SMS Code</Text>
+                )}
               </Pressable>
-            </View>
-            <TextInput
-              style={styles.input}
-              value={otpCode}
-              onChangeText={(txt) => {
-                setOtpCode(txt.replace(/\D/g, "").slice(0, 6));
-                setOtpError(null);
+            ) : (
+              <>
+                <View style={styles.otpHeader}>
+                  <Text style={styles.inputLabel}>6-Digit SMS Code</Text>
+                  <Pressable disabled={isBusy} onPress={() => void handleSendOtp()}>
+                    <Text style={styles.resendLink}>
+                      {loadingAction === "send_otp" ? "Sending..." : "Resend Code"}
+                    </Text>
+                  </Pressable>
+                </View>
+                <TextInput
+                  style={styles.input}
+                  value={otpCode}
+                  onChangeText={(txt) => {
+                    setOtpCode(txt.replace(/\D/g, "").slice(0, 6));
+                    setAuthError(null);
+                  }}
+                  keyboardType="number-pad"
+                  textContentType="oneTimeCode"
+                  autoComplete="sms-otp"
+                  maxLength={6}
+                  editable={!isBusy}
+                  placeholder="6-digit code"
+                  placeholderTextColor="#94A3B8"
+                />
+
+                <Pressable
+                  style={[styles.primaryButton, isBusy && styles.buttonDisabled]}
+                  disabled={isBusy}
+                  onPress={() => void handleVerifyOtp()}
+                >
+                  {loadingAction === "verify_otp" ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Verify & Unlock</Text>
+                  )}
+                </Pressable>
+              </>
+            )}
+
+            {authError ? <Text style={styles.errorText}>{authError}</Text> : null}
+
+            <Pressable
+              style={styles.secondaryButton}
+              disabled={isBusy}
+              onPress={() => {
+                setAuthError(null);
+                setSentPhoneE164(null);
+                setOtpCode("");
+                setManualStep("provider");
               }}
-              keyboardType="number-pad"
-              maxLength={6}
-              placeholder="123456"
-              placeholderTextColor="#94A3B8"
-            />
-
-            {otpError ? <Text style={styles.errorText}>{otpError}</Text> : null}
-
-            <Pressable style={styles.primaryButton} onPress={handleVerifyOtp}>
-              <Text style={styles.primaryButtonText}>Verify & Unlock</Text>
-            </Pressable>
-            <Pressable style={styles.secondaryButton} onPress={() => setProvider(null)}>
+            >
               <Text style={styles.secondaryButtonText}>Back</Text>
             </Pressable>
           </View>
@@ -228,7 +395,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#334155",
   },
-  demoFill: {
+  resendLink: {
     fontSize: 12,
     fontWeight: "700",
     color: "#0F766E",
@@ -270,5 +437,8 @@ const styles = StyleSheet.create({
     color: "#0F172A",
     fontSize: 15,
     fontWeight: "600",
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
 });
