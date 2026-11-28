@@ -469,7 +469,7 @@ describe("Edge Function handlers", () => {
     const attestation = await createAppleAttestationFixture({
       appleAppId: APPLE_APP_ID,
       userId: USER_A,
-      keyId: "device-key-1",
+      keyId: btoa("device-key-1"),
       nonce,
       payload: payloadWithoutAttestation,
       signCount: 1,
@@ -1251,7 +1251,7 @@ describe("Edge Function handlers", () => {
       },
     });
 
-    // POST /auth-challenge with `{}` issues a nonce (200)
+    // POST /auth-challenge with `{}` issues a nonce (200), but enrollment fields without `action` -> 400
     const emptyPostNonceRes = await challengeHandler(
       new Request("https://edge.local/auth-challenge", {
         method: "POST",
@@ -1260,6 +1260,15 @@ describe("Edge Function handlers", () => {
       }),
     );
     expect(emptyPostNonceRes.status).toBe(200);
+
+    const missingActionRes = await challengeHandler(
+      new Request("https://edge.local/auth-challenge", {
+        method: "POST",
+        headers: { Authorization: "Bearer jwt-a", "Content-Type": "application/json" },
+        body: JSON.stringify({ keyId, attestationObject: "abc", nonce: "0123456789abcdef" }),
+      }),
+    );
+    expect(missingActionRes.status).toBe(400);
 
     // Untrusted x5c chain -> 403
     const badNonce = "bad_nonce_0123456789abcdef";
@@ -1429,6 +1438,94 @@ describe("Edge Function handlers", () => {
     const redisKey = `app_attest_key:${USER_A}:${keyId}`;
     expect(await redis.client.compareAndAdvanceCounter(redisKey, 1, 3600)).toBe(true);
     expect(await redis.client.compareAndAdvanceCounter(redisKey, 1, 3600)).toBe(false);
+
+    // Base64URL unpadded keyId resolves to the same canonical Redis key as padded Base64
+    const keyIdUrlSafe = keyId.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+    const followUpNonce = "followup_nonce_12345678";
+    await redis.client.setEx(`auth_nonce:${USER_A}:${followUpNonce}`, 60, "1");
+    const assertBody = { recipientId: USER_B, icebreakerText: "Kem cho!" };
+    const assertPayloadHash = await sha256Hex(canonicalizeAttestationPayload(assertBody));
+    const assertAuthData = new Uint8Array(37);
+    assertAuthData.set(rpIdHash, 0);
+    assertAuthData[32] = 0x01;
+    new DataView(assertAuthData.buffer).setUint32(33, 2, false);
+    const assertClientHash = await sha256Bytes(`${followUpNonce}:${assertPayloadHash}`);
+    const assertSigned = concatAll(assertAuthData, assertClientHash);
+    const assertRawSig = new Uint8Array(
+      await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, ecKey.privateKey, assertSigned),
+    );
+    const assertToken = encodeAppleAssertionCbor(assertAuthData, rawP256ToDer(assertRawSig));
+    const appleConnHandler = createSendConnectionRequestHandler({
+      db,
+      redis: redis.client,
+      attestation: {
+        redis: redis.client,
+        mode: "enforce",
+        appleAppId: APPLE_APP_ID,
+      },
+    });
+    const urlSafeRes = await appleConnHandler(
+      new Request("https://edge.local/send-connection-request", {
+        method: "POST",
+        headers: { Authorization: "Bearer jwt-a", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          attestation: {
+            platform: "ios",
+            nonce: followUpNonce,
+            token: assertToken,
+            keyId: keyIdUrlSafe,
+            payloadHash: assertPayloadHash,
+          },
+          ...assertBody,
+        }),
+      }),
+    );
+    expect(urlSafeRes.status).toBe(201);
+
+    // Phone unique constraint (users_phone_e164_key) maps to 409 phone_already_in_use
+    const phoneConflictDb: EdgeDbAdapter = {
+      ...db,
+      async getUserProfile() {
+        return null;
+      },
+      async createHouseholdWithAdmin() {
+        const err = new Error("duplicate") as Error & { code?: string; details?: string };
+        err.code = "23505";
+        err.details = "Key (phone_e164)=(+12105550101) already exists. users_phone_e164_key";
+        throw err;
+      },
+    };
+    const phoneConflictNonce = "phone_conflict_nonce_1234";
+    await redis.client.setEx(`auth_nonce:${USER_A}:${phoneConflictNonce}`, 60, "1");
+    const createBody = {
+      gps: { lat: 29.5124, lng: -98.5742, accuracyMeters: 10 },
+      hometownLocationId: "vadodara-alkapuri",
+      firstName: "Aarav",
+    };
+    const createHash = await sha256Hex(canonicalizeAttestationPayload(createBody));
+    const phoneConflictHandler = createCreateHouseholdHandler({
+      db: phoneConflictDb,
+      redis: redis.client,
+      attestation: { redis: redis.client, mode: "dev_bypass" },
+      latLngToH3Res7: () => "874880102ffffff",
+    });
+    const phoneConflictRes = await phoneConflictHandler(
+      new Request("https://edge.local/create-household", {
+        method: "POST",
+        headers: { Authorization: "Bearer jwt-a", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          attestation: {
+            platform: "android",
+            nonce: phoneConflictNonce,
+            token: "t",
+            payloadHash: createHash,
+          },
+          ...createBody,
+        }),
+      }),
+    );
+    expect(phoneConflictRes.status).toBe(409);
+    expect(await phoneConflictRes.json()).toMatchObject({ error: "phone_already_in_use" });
 
     // 5. DB read failure in send-connection-request maps to 503 service_unavailable
     const failingDb: EdgeDbAdapter = {

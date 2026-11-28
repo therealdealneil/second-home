@@ -11,12 +11,15 @@
 Every write mutation (`create_household`, `join_household`, `send_connection_request`) must pass through a Supabase Edge Function that validates a cryptographic device attestation token.
 
 ### Attestation Handshake Flow
-1. **Challenge Nonce:** Mobile client requests a single-use, 60-second cryptographic `nonce` from `POST /functions/v1/auth-challenge` (stored in Upstash Redis).
-2. **OS-Level Signing:**
-   - **iOS:** Client calls `DCAppAttestService.generateAssertion` using the server `nonce` + request payload hash.
-   - **Android:** Client calls Google `IntegrityManager.requestIntegrityToken` with `nonce` + payload hash.
-3. **Server Verification:**
-   - Edge Function verifies the Apple assertion signature / Google Play Integrity verdict (`MEETS_DEVICE_INTEGRITY` + `APP_RECOGNIZED`).
+1. **First-Device iOS Key Enrollment (Once per Key):**
+   - On a fresh installation, iOS generates an App Attest keypair (`DCAppAttestService.generateKey`), requests a single-use challenge nonce (`GET` or `POST {}` to `/functions/v1/auth-challenge`), calls `DCAppAttestService.attestKey(keyId, clientDataHash: SHA256(nonce))`, and enrolls the key via `POST /functions/v1/auth-challenge` with `{ action: "register_apple_key", keyId, attestationObject, nonce }` (which validates the Apple Root CA `x5c` chain, `aaguid`, and extension nonce, and consumes that enrollment nonce).
+   - After enrollment, the client fetches a **separate** challenge nonce for its first protected write request.
+2. **Challenge Nonce:** Mobile client requests a single-use, 60-second cryptographic `nonce` from `GET` or `POST /functions/v1/auth-challenge` (stored in Upstash Redis).
+3. **OS-Level Signing:**
+   - **iOS:** Client calls `DCAppAttestService.generateAssertion` using `SHA256(nonce + ":" + payloadHash)`.
+   - **Android:** Client calls Google `IntegrityManager.requestIntegrityToken` with `base64url(SHA256(nonce + ":" + payloadHash))`.
+4. **Server Verification:**
+   - Edge Function verifies the Apple assertion signature (against the enrolled key and monotonic `signCount`) / Google Play Integrity verdict (`MEETS_DEVICE_INTEGRITY` + `PLAY_RECOGNIZED`).
    - Requests from rooted/jailbroken devices, emulators, or unsigned scripts are rejected with `403 Forbidden` before touching PostgreSQL.
 
 ---

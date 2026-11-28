@@ -18,12 +18,16 @@ export type AuthChallengeDeps = {
   nowMs?: () => number;
 };
 
-const RegisterAppleKeySchema = z.object({
-  action: z.literal("register_apple_key"),
-  keyId: z.string().trim().min(1).max(256),
-  attestationObject: z.string().trim().min(1).max(32_768),
-  nonce: z.string().trim().min(16).max(128),
-});
+const EmptyChallengeBodySchema = z.object({}).strict();
+
+const RegisterAppleKeySchema = z
+  .object({
+    action: z.literal("register_apple_key"),
+    keyId: z.string().trim().min(1).max(256),
+    attestationObject: z.string().trim().min(1).max(32_768),
+    nonce: z.string().trim().min(16).max(128),
+  })
+  .strict();
 
 function generateRandomNonceHex(byteLength = 32): string {
   const bytes = new Uint8Array(byteLength);
@@ -65,16 +69,10 @@ export function createAuthChallengeHandler(deps: AuthChallengeDeps) {
         if (!bodyResult.ok) {
           return bodyResult.response;
         }
-        const maybeObj = bodyResult.data;
-        const hasAction =
-          typeof maybeObj === "object" &&
-          maybeObj !== null &&
-          !Array.isArray(maybeObj) &&
-          "action" in maybeObj &&
-          (maybeObj as { action?: unknown }).action !== undefined;
-
-        if (hasAction) {
-          const parsed = RegisterAppleKeySchema.safeParse(maybeObj);
+        if (EmptyChallengeBodySchema.safeParse(bodyResult.data).success) {
+          // Empty `{}` POST requests issue a challenge nonce
+        } else {
+          const parsed = RegisterAppleKeySchema.safeParse(bodyResult.data);
           if (!parsed.success) {
             return errorResponse(400, "invalid_request", "Invalid Apple key enrollment payload.");
           }

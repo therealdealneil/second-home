@@ -135,13 +135,22 @@ export function createCreateHouseholdHandler(deps: CreateHouseholdDeps) {
       });
     } catch (err) {
       const pgErr = err as { code?: string; details?: string; messageDetail?: string };
-      const detailText = `${pgErr.details ?? ""} ${pgErr.messageDetail ?? ""}`;
-      if (pgErr.code === "23505" && !detailText.includes("households_invite_code_key")) {
-        return errorResponse(
-          409,
-          "user_already_in_household",
-          "Account already belongs to a household.",
-        );
+      if (pgErr.code === "23505") {
+        const detailText = `${pgErr.details ?? ""} ${pgErr.messageDetail ?? ""}`;
+        if (detailText.includes("users_phone_e164_key")) {
+          return errorResponse(
+            409,
+            "phone_already_in_use",
+            "This phone number is already registered to another household.",
+          );
+        }
+        if (detailText.includes("users_pkey") || !detailText.trim()) {
+          return errorResponse(
+            409,
+            "user_already_in_household",
+            "Account already belongs to a household.",
+          );
+        }
       }
       return errorResponse(500, "create_household_failed", "Unable to create household.");
     }

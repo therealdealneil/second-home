@@ -251,7 +251,19 @@ async function verifyAppleAppAttest(
     };
   }
 
-  const redisKey = `app_attest_key:${userId}:${attestation.keyId}`;
+  let canonicalKeyId: string;
+  try {
+    canonicalKeyId = bytesToBase64(base64ToBytes(attestation.keyId));
+  } catch {
+    return {
+      ok: false,
+      status: 403,
+      error: "attestation_failed",
+      message: "Device attestation verification failed.",
+    };
+  }
+
+  const redisKey = `app_attest_key:${userId}:${canonicalKeyId}`;
   const storedRaw = await deps.redis.get(redisKey);
   if (!storedRaw) {
     return {
@@ -458,13 +470,13 @@ function readDerTlv(bytes: Uint8Array, offset: number): DerTlv {
       throw new Error("DER invalid length");
     }
     for (let i = 0; i < numOctets; i++) {
-      valueLen = (valueLen << 8) | (bytes[pos++] ?? 0);
+      valueLen = valueLen * 256 + (bytes[pos++] ?? 0);
     }
   }
-  const valueEnd = pos + valueLen;
-  if (valueEnd > bytes.length) {
+  if (!Number.isSafeInteger(valueLen) || valueLen < 0 || valueLen > bytes.length - pos) {
     throw new Error("DER value truncated");
   }
+  const valueEnd = pos + valueLen;
   return { tag, headerLen: pos - offset, valueStart: pos, valueEnd, totalEnd: valueEnd };
 }
 
@@ -473,6 +485,9 @@ function readDerChildren(bytes: Uint8Array, start: number, end: number): DerTlv[
   let pos = start;
   while (pos < end) {
     const child = readDerTlv(bytes, pos);
+    if (child.totalEnd <= pos) {
+      throw new Error("DER child failed to advance");
+    }
     children.push(child);
     pos = child.totalEnd;
   }
@@ -887,7 +902,8 @@ export async function registerAppleAppAttestKey(params: {
     };
   }
 
-  const redisKey = `app_attest_key:${userId}:${keyId}`;
+  const canonicalKeyId = bytesToBase64(base64ToBytes(keyId));
+  const redisKey = `app_attest_key:${userId}:${canonicalKeyId}`;
   let stored: boolean;
   try {
     stored = await deps.redis.setNxEx(

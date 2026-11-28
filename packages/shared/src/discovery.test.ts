@@ -24,6 +24,7 @@ describe("icebreaker anti-abuse validation", () => {
       text: "Kem cho! Lived in Ahmedabad 2015-2020, now near Med Center.",
     });
     expect(validateIcebreaker("Meet 2026-11-28 - 10 am near Medical Center?").ok).toBe(true);
+    expect(validateIcebreaker("Meet 2026-11-28 2026-11-29 - 10 am").ok).toBe(true);
   });
 
   it("rejects empty, overly long, link-containing, or phone-containing notes", () => {

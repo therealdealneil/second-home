@@ -144,13 +144,23 @@ export function createJoinHouseholdHandler(deps: JoinHouseholdDeps) {
         lastVerifiedAt: new Date(gate.nowMs).toISOString(),
       });
     } catch (err) {
-      const code = (err as { code?: string }).code;
-      if (code === "23505") {
-        return errorResponse(
-          409,
-          "user_already_in_household",
-          "Account already belongs to a household.",
-        );
+      const pgErr = err as { code?: string; details?: string; messageDetail?: string };
+      if (pgErr.code === "23505") {
+        const detailText = `${pgErr.details ?? ""} ${pgErr.messageDetail ?? ""}`;
+        if (detailText.includes("users_phone_e164_key")) {
+          return errorResponse(
+            409,
+            "phone_already_in_use",
+            "This phone number is already registered to another household.",
+          );
+        }
+        if (detailText.includes("users_pkey") || !detailText.trim()) {
+          return errorResponse(
+            409,
+            "user_already_in_household",
+            "Account already belongs to a household.",
+          );
+        }
       }
       return errorResponse(500, "join_household_failed", "Unable to join household.");
     }

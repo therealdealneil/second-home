@@ -196,7 +196,7 @@ update public.connections
 set icebreaker_text = null
 where icebreaker_text is not null
   and regexp_replace(
-        regexp_replace(icebreaker_text, '(?:^|[^0-9])(19|20)[0-9]{2}-[0-9]{2}-[0-9]{2}(?:$|[^0-9])', ' ', 'g'),
+        regexp_replace(icebreaker_text, '(?:^|[^0-9])(19|20)[0-9]{2}-[0-9]{2}-[0-9]{2}(?=$|[^0-9])', ' ', 'g'),
         E'[+(). \\t\\u00A0-]',
         '',
         'g'
@@ -206,7 +206,7 @@ alter table public.connections drop constraint if exists connections_icebreaker_
 alter table public.connections add constraint connections_icebreaker_no_phone check (
   icebreaker_text is null
   or regexp_replace(
-       regexp_replace(icebreaker_text, '(?:^|[^0-9])(19|20)[0-9]{2}-[0-9]{2}-[0-9]{2}(?:$|[^0-9])', ' ', 'g'),
+       regexp_replace(icebreaker_text, '(?:^|[^0-9])(19|20)[0-9]{2}-[0-9]{2}-[0-9]{2}(?=$|[^0-9])', ' ', 'g'),
        E'[+(). \\t\\u00A0-]',
        '',
        'g'

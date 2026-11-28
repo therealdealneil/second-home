@@ -235,8 +235,12 @@ export function createEdgeDbAdapter(supabaseUrl: string, serviceRoleKey: string)
       if (error) {
         const err = new Error(`createUserProfile failed: ${error.code ?? "unknown"}`) as Error & {
           code?: string;
+          details?: string;
+          messageDetail?: string;
         };
         err.code = error.code;
+        err.details = error.details;
+        err.messageDetail = error.message;
         throw err;
       }
     },
