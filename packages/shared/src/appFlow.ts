@@ -76,7 +76,8 @@ export type AppFlowAction =
   | { type: "SELECT_ORIGIN"; origin: GujaratLocation }
   | { type: "EDIT_ORIGIN" }
   | { type: "SET_PENDING_INTENT"; intent: PendingAuthIntent }
-  | { type: "COMPLETE_MOCK_AUTH" }
+  | { type: "COMPLETE_AUTH" }
+  | { type: "RECONCILE_AUTH_SESSION"; isAuthenticated: boolean }
   | { type: "COMPLETE_PERSONALIZATION"; personalization?: PersonalizationDraft }
   | { type: "CLEAR_PENDING_INTENT" }
   | { type: "UPDATE_FILTERS"; filters: Partial<DiscoveryFilters> }
@@ -230,7 +231,7 @@ export function appFlowReducer(state: AppFlowState, action: AppFlowAction): AppF
       };
     }
 
-    case "COMPLETE_MOCK_AUTH": {
+    case "COMPLETE_AUTH": {
       const desiredPhase: AppFlowPhase = state.hasCompletedPersonalization
         ? "discovery"
         : "personalize";
@@ -245,6 +246,28 @@ export function appFlowReducer(state: AppFlowState, action: AppFlowAction): AppF
         isAuthenticated: true,
         phase: nextPhase,
         pendingIntent: state.pendingIntent?.type === "unlock_map" ? null : state.pendingIntent,
+      };
+    }
+
+    case "RECONCILE_AUTH_SESSION": {
+      if (state.isAuthenticated === action.isAuthenticated) {
+        return state;
+      }
+      const desiredPhase: AppFlowPhase = action.isAuthenticated
+        ? state.hasCompletedPersonalization
+          ? "discovery"
+          : "personalize"
+        : state.phase;
+      const nextPhase = resolveValidatedPhase(desiredPhase, {
+        confirmedNeighborhood: state.confirmedNeighborhood,
+        selectedOrigin: state.selectedOrigin,
+        isAuthenticated: action.isAuthenticated,
+        hasCompletedPersonalization: state.hasCompletedPersonalization,
+      });
+      return {
+        ...state,
+        isAuthenticated: action.isAuthenticated,
+        phase: nextPhase,
       };
     }
 
