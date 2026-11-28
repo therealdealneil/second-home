@@ -76,7 +76,7 @@ export type AppFlowAction =
   | { type: "SELECT_ORIGIN"; origin: GujaratLocation }
   | { type: "EDIT_ORIGIN" }
   | { type: "SET_PENDING_INTENT"; intent: PendingAuthIntent }
-  | { type: "COMPLETE_MOCK_AUTH" }
+  | { type: "COMPLETE_AUTH" }
   | { type: "COMPLETE_PERSONALIZATION"; personalization?: PersonalizationDraft }
   | { type: "CLEAR_PENDING_INTENT" }
   | { type: "UPDATE_FILTERS"; filters: Partial<DiscoveryFilters> }
@@ -230,7 +230,7 @@ export function appFlowReducer(state: AppFlowState, action: AppFlowAction): AppF
       };
     }
 
-    case "COMPLETE_MOCK_AUTH": {
+    case "COMPLETE_AUTH": {
       const desiredPhase: AppFlowPhase = state.hasCompletedPersonalization
         ? "discovery"
         : "personalize";

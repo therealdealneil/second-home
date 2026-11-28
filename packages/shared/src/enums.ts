@@ -41,3 +41,58 @@ export const ConnectionRecordSchema = z.object({
   updatedAt: z.string(),
 });
 export type ConnectionRecord = z.infer<typeof ConnectionRecordSchema>;
+
+const E164_PHONE_SCHEMA = z
+  .string()
+  .trim()
+  .regex(/^\+[1-9][0-9]{6,14}$/, "Phone number must be in E.164 format (e.g. +12105550199)");
+
+export const OtpCodeSchema = z
+  .string()
+  .trim()
+  .regex(/^[0-9]{6}$/, "Verification code must be 6 digits");
+
+export const ActivationStatusSchema = z.union([
+  AccountStatusSchema,
+  z.literal("pending_household"),
+]);
+export type ActivationStatus = z.infer<typeof ActivationStatusSchema>;
+
+export const ActivateAccountResponseSchema = z.object({
+  status: ActivationStatusSchema,
+  phoneVerified: z.literal(true),
+});
+export type ActivateAccountResponse = z.infer<typeof ActivateAccountResponseSchema>;
+
+export const UserStatusRowSchema = z.object({
+  id: z.string().uuid(),
+  status: AccountStatusSchema,
+});
+export type UserStatusRow = z.infer<typeof UserStatusRowSchema>;
+
+/**
+ * Normalizes a user-entered phone number into strict E.164 format.
+ * 10-digit numbers without a leading `+` default to US (+1) for the San Antonio launch corridor.
+ */
+export function normalizePhoneE164(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const digits = trimmed.replace(/\D/g, "");
+  if (digits.length === 0) {
+    return null;
+  }
+
+  let candidate: string;
+  if (trimmed.startsWith("+")) {
+    candidate = `+${digits}`;
+  } else if (digits.length === 10) {
+    candidate = `+1${digits}`;
+  } else {
+    candidate = `+${digits}`;
+  }
+
+  const parsed = E164_PHONE_SCHEMA.safeParse(candidate);
+  return parsed.success ? parsed.data : null;
+}

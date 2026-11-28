@@ -12,6 +12,8 @@ import {
   MAX_CURRENT_RADIUS_METERS,
   MAX_HOMETOWN_RADIUS_METERS,
   MIN_HOUSEHOLDS_PER_HEX,
+  OtpCodeSchema,
+  normalizePhoneE164,
 } from "./enums";
 
 // Expected values come from docs/03_data_privacy_schema.md (enum types).
@@ -55,5 +57,27 @@ describe("privacy constants match docs/03 & docs/04", () => {
     expect(MIN_HOUSEHOLDS_PER_HEX).toBe(2);
     expect(MAX_CURRENT_RADIUS_METERS).toBe(40_233);
     expect(MAX_HOMETOWN_RADIUS_METERS).toBe(80_467);
+  });
+});
+
+describe("phone & OTP validation", () => {
+  it("normalizes US and international phone numbers to E.164", () => {
+    expect(normalizePhoneE164("+1 (210) 555-0199")).toBe("+12105550199");
+    expect(normalizePhoneE164("2105550199")).toBe("+12105550199");
+    expect(normalizePhoneE164("(210) 555-0199")).toBe("+12105550199");
+    expect(normalizePhoneE164("+91 98765 43210")).toBe("+919876543210");
+  });
+
+  it("rejects invalid phone numbers", () => {
+    expect(normalizePhoneE164("")).toBeNull();
+    expect(normalizePhoneE164("12345")).toBeNull();
+    expect(normalizePhoneE164("+0123456789")).toBeNull();
+    expect(normalizePhoneE164("1234567890123456")).toBeNull();
+  });
+
+  it("validates 6-digit OTP codes", () => {
+    expect(OtpCodeSchema.safeParse("123456").success).toBe(true);
+    expect(OtpCodeSchema.safeParse("12345").success).toBe(false);
+    expect(OtpCodeSchema.safeParse("12345a").success).toBe(false);
   });
 });

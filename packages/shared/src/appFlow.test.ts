@@ -33,7 +33,7 @@ describe("appFlowReducer Flow B -> Soft Auth -> Flow C", () => {
       type: "SET_PENDING_INTENT",
       intent: { type: "open_household", householdId: "hh-1" },
     });
-    state = appFlowReducer(state, { type: "COMPLETE_MOCK_AUTH" });
+    state = appFlowReducer(state, { type: "COMPLETE_AUTH" });
     expect(state.isAuthenticated).toBe(true);
     expect(state.phase).toBe("personalize");
     expect(state.pendingIntent).toEqual({ type: "open_household", householdId: "hh-1" });
@@ -79,9 +79,9 @@ describe("appFlowReducer Flow B -> Soft Auth -> Flow C", () => {
     expect(next.phase).toBe("discovery");
   });
 
-  it("enforces location and auth prerequisites on COMPLETE_MOCK_AUTH and COMPLETE_PERSONALIZATION", () => {
+  it("enforces location and auth prerequisites on COMPLETE_AUTH and COMPLETE_PERSONALIZATION", () => {
     const authWithoutLocation = appFlowReducer(INITIAL_APP_FLOW_STATE, {
-      type: "COMPLETE_MOCK_AUTH",
+      type: "COMPLETE_AUTH",
     });
     expect(authWithoutLocation.isAuthenticated).toBe(true);
     expect(authWithoutLocation.phase).toBe("confirm_neighborhood");
@@ -91,7 +91,7 @@ describe("appFlowReducer Flow B -> Soft Auth -> Flow C", () => {
         ...INITIAL_APP_FLOW_STATE,
         confirmedNeighborhood: MEDICAL_CENTER,
       },
-      { type: "COMPLETE_MOCK_AUTH" },
+      { type: "COMPLETE_AUTH" },
     );
     expect(authWithoutOrigin.phase).toBe("select_hometown");
 
@@ -116,7 +116,7 @@ describe("appFlowReducer Flow B -> Soft Auth -> Flow C", () => {
       pendingIntent: { type: "unlock_map" as const },
     };
 
-    const afterAuth = appFlowReducer(ready, { type: "COMPLETE_MOCK_AUTH" });
+    const afterAuth = appFlowReducer(ready, { type: "COMPLETE_AUTH" });
     expect(afterAuth.pendingIntent).toBeNull();
     expect(afterAuth.phase).toBe("personalize");
   });
