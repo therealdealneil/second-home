@@ -32,6 +32,11 @@ import { getSupabaseClient } from "@/lib/supabase";
 
 const STORAGE_KEY = "second_home.app_flow.v1";
 
+type ScopedAccountStatus = {
+  userId: string;
+  status: ActivationStatus | null;
+};
+
 type AppFlowContextValue = {
   state: AppFlowState;
   isHydrated: boolean;
@@ -67,9 +72,14 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
   const [canPersist, setCanPersist] = useState(false);
   const [authSession, setAuthSession] = useState<Session | null>(null);
   const [hasResolvedSession, setHasResolvedSession] = useState(() => getSupabaseClient() === null);
-  const [accountStatus, setAccountStatus] = useState<ActivationStatus | null>(null);
+  const [scopedAccountStatus, setScopedAccountStatus] = useState<ScopedAccountStatus | null>(null);
   const userMutatedBeforeHydrationRef = useRef(false);
   const authSyncGenerationRef = useRef(0);
+
+  const accountStatus: ActivationStatus | null =
+    authSession?.user && scopedAccountStatus?.userId === authSession.user.id
+      ? scopedAccountStatus.status
+      : null;
 
   useEffect(() => {
     const supabase = getSupabaseClient();
@@ -87,12 +97,14 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
       setAuthSession(session);
       setHasResolvedSession(true);
       if (!session?.user) {
-        setAccountStatus(null);
+        setScopedAccountStatus(null);
         return;
       }
-      const nextStatus = await fetchCurrentAccountStatus(session.user.id);
+      const sessionUserId = session.user.id;
+      setScopedAccountStatus((prev) => (prev?.userId === sessionUserId ? prev : null));
+      const nextStatus = await fetchCurrentAccountStatus(sessionUserId);
       if (!cancelled && generation === authSyncGenerationRef.current) {
-        setAccountStatus(nextStatus);
+        setScopedAccountStatus({ userId: sessionUserId, status: nextStatus });
       }
     }
 
@@ -118,13 +130,12 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
       dispatch({ type: "RECONCILE_AUTH_SESSION", isAuthenticated: false });
       return;
     }
-    if (accountStatus === null) {
-      return;
-    }
+    const currentUserStatus =
+      scopedAccountStatus?.userId === authSession.user.id ? scopedAccountStatus.status : null;
     const isConfirmedAndPermitted =
-      Boolean(authSession.user.phone_confirmed_at) && isPermittedAccountStatus(accountStatus);
+      Boolean(authSession.user.phone_confirmed_at) && isPermittedAccountStatus(currentUserStatus);
     dispatch({ type: "RECONCILE_AUTH_SESSION", isAuthenticated: isConfirmedAndPermitted });
-  }, [accountStatus, authSession, hasResolvedSession, isHydrated]);
+  }, [authSession, hasResolvedSession, isHydrated, scopedAccountStatus]);
 
   useEffect(() => {
     let cancelled = false;
@@ -207,11 +218,13 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
     (status?: ActivationStatus) => {
       if (status) {
         authSyncGenerationRef.current += 1;
-        setAccountStatus(status);
+        if (authSession?.user?.id) {
+          setScopedAccountStatus({ userId: authSession.user.id, status });
+        }
       }
       trackedDispatch({ type: "COMPLETE_AUTH" });
     },
-    [trackedDispatch],
+    [authSession, trackedDispatch],
   );
 
   const completePersonalization = useCallback(
@@ -297,7 +310,7 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
     authSyncGenerationRef.current += 1;
     setCanPersist(true);
     setAuthSession(null);
-    setAccountStatus(null);
+    setScopedAccountStatus(null);
     void signOutAuthProviders();
     trackedDispatch({ type: "RESET_FLOW" });
     void AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});

@@ -10,11 +10,12 @@ function enqueueKeyOp<T>(key: string, op: () => Promise<T>): Promise<T> {
   const prev = keyQueues.get(key) ?? Promise.resolve();
   const next = prev.catch(() => undefined).then(op);
   keyQueues.set(key, next);
-  void next.finally(() => {
+  const cleanup = () => {
     if (keyQueues.get(key) === next) {
       keyQueues.delete(key);
     }
-  });
+  };
+  void next.then(cleanup, cleanup);
   return next;
 }
 
