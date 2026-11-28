@@ -190,8 +190,14 @@ export function createEdgeDbAdapter(supabaseUrl: string, serviceRoleKey: string)
           `createHouseholdWithAdmin failed: ${error.code ?? "unknown"}`,
         ) as Error & {
           code?: string;
+          details?: string;
+          hint?: string;
+          messageDetail?: string;
         };
         err.code = error.code;
+        err.details = error.details;
+        err.hint = error.hint;
+        err.messageDetail = error.message;
         throw err;
       }
       const row = Array.isArray(data) ? data[0] : data;

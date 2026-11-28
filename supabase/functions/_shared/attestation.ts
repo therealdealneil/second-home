@@ -18,6 +18,8 @@ export type AttestationDeps = {
   redis: UpstashRedisClient;
   mode: AttestationMode;
   appleAppId?: string;
+  appleEnvironment?: "production" | "sandbox";
+  appleRootCaDerBase64?: string;
   googlePackageName?: string;
   googleServiceAccountJson?: string;
   fetchImpl?: typeof fetch;
@@ -359,11 +361,17 @@ async function verifyAppleAppAttest(
       };
     }
 
-    const advanced = await deps.redis.compareAndAdvanceCounter(
-      redisKey,
-      signCount,
-      60 * 60 * 24 * 365,
-    );
+    let advanced: boolean;
+    try {
+      advanced = await deps.redis.compareAndAdvanceCounter(redisKey, signCount, 60 * 60 * 24 * 365);
+    } catch {
+      return {
+        ok: false,
+        status: 503,
+        error: "attestation_unavailable",
+        message: "Unable to verify device attestation counter right now.",
+      };
+    }
     if (!advanced) {
       return {
         ok: false,
@@ -395,6 +403,291 @@ const GOOGLE_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const APPLE_ATTEST_OID_BYTES = new Uint8Array([
   0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x63, 0x64, 0x08, 0x02,
 ]);
+const APPLE_PRODUCTION_AAGUID = new TextEncoder().encode("appattest\0\0\0\0\0\0\0");
+const APPLE_SANDBOX_AAGUID = new TextEncoder().encode("appattestdevelop");
+
+// Official Apple App Attestation Root CA (https://www.apple.com/certificateauthority/Apple_App_Attestation_Root_CA.pem)
+const APPLE_APP_ATTESTATION_ROOT_CA_DER_BASE64 =
+  "MIICITCCAaegAwIBAgIQC/O+DvHN0uD7jG5yH2IXmDAKBggqhkjOPQQDAzBSMSYw" +
+  "JAYDVQQDDB1BcHBsZSBBcHAgQXR0ZXN0YXRpb24gUm9vdCBDQTETMBEGA1UECgwK" +
+  "QXBwbGUgSW5jLjETMBEGA1UECAwKQ2FsaWZvcm5pYTAeFw0yMDAzMTgxODMyNTNa" +
+  "Fw00NTAzMTUwMDAwMDBaMFIxJjAkBgNVBAMMHUFwcGxlIEFwcCBBdHRlc3RhdGlv" +
+  "biBSb290IENBMRMwEQYDVQQKDApBcHBsZSBJbmMuMRMwEQYDVQQIDApDYWxpZm9y" +
+  "bmlhMHYwEAYHKoZIzj0CAQYFK4EEACIDYgAERTHhmLW07ATaFQIEVwTtT4dyctdh" +
+  "NbJhFs/Ii2FdCgAHGbpphY3+d8qjuDngIN3WVhQUBHAoMeQ/cLiP1sOUtgjqK9au" +
+  "Yen1mMEvRq9Sk3Jm5X8U62H+xTD3FE9TgS41o0IwQDAPBgNVHRMBAf8EBTADAQH/" +
+  "MB0GA1UdDgQWBBSskRBTM72+aEH/pwyp5frq5eWKoTAOBgNVHQ8BAf8EBAMCAQYw" +
+  "CgYIKoZIzj0EAwMDaAAwZQIwQgFGnByvsiVbpTKwSga0kP0e8EeDS4+sQmTvb7vn" +
+  "53O5+FRXgeLhpJ06ysC5PrOyAjEAp5U4xDgEgllF7En3VcE3iexZZtKeYnpqtijV" +
+  "oyFraWVIyd/dganmrduC1bmTBGwD";
+
+// ECDSA OIDs
+const OID_ECDSA_SHA256 = new Uint8Array([
+  0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x04, 0x03, 0x02,
+]);
+const OID_ECDSA_SHA384 = new Uint8Array([
+  0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x04, 0x03, 0x03,
+]);
+const OID_P256 = new Uint8Array([0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07]);
+const OID_P384 = new Uint8Array([0x06, 0x05, 0x2b, 0x81, 0x04, 0x00, 0x22]);
+
+type DerTlv = {
+  tag: number;
+  headerLen: number;
+  valueStart: number;
+  valueEnd: number;
+  totalEnd: number;
+};
+
+function readDerTlv(bytes: Uint8Array, offset: number): DerTlv {
+  if (offset >= bytes.length) {
+    throw new Error("DER unexpected EOF");
+  }
+  const tag = bytes[offset] ?? 0;
+  let pos = offset + 1;
+  if (pos >= bytes.length) {
+    throw new Error("DER missing length");
+  }
+  const lenByte = bytes[pos++] ?? 0;
+  let valueLen = 0;
+  if ((lenByte & 0x80) === 0) {
+    valueLen = lenByte;
+  } else {
+    const numOctets = lenByte & 0x7f;
+    if (numOctets === 0 || numOctets > 4 || pos + numOctets > bytes.length) {
+      throw new Error("DER invalid length");
+    }
+    for (let i = 0; i < numOctets; i++) {
+      valueLen = (valueLen << 8) | (bytes[pos++] ?? 0);
+    }
+  }
+  const valueEnd = pos + valueLen;
+  if (valueEnd > bytes.length) {
+    throw new Error("DER value truncated");
+  }
+  return { tag, headerLen: pos - offset, valueStart: pos, valueEnd, totalEnd: valueEnd };
+}
+
+function readDerChildren(bytes: Uint8Array, start: number, end: number): DerTlv[] {
+  const children: DerTlv[] = [];
+  let pos = start;
+  while (pos < end) {
+    const child = readDerTlv(bytes, pos);
+    children.push(child);
+    pos = child.totalEnd;
+  }
+  if (pos !== end) {
+    throw new Error("DER container length mismatch");
+  }
+  return children;
+}
+
+function parseAsn1TimeMs(bytes: Uint8Array, tlv: DerTlv): number {
+  const raw = new TextDecoder().decode(bytes.slice(tlv.valueStart, tlv.valueEnd));
+  if (tlv.tag === 0x17) {
+    // UTCTime: YYMMDDHHMMSSZ
+    const m = /^(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})Z$/.exec(raw);
+    if (!m) throw new Error("Invalid UTCTime");
+    const yy = Number.parseInt(m[1]!, 10);
+    const year = yy >= 50 ? 1900 + yy : 2000 + yy;
+    return Date.UTC(
+      year,
+      Number.parseInt(m[2]!, 10) - 1,
+      Number.parseInt(m[3]!, 10),
+      Number.parseInt(m[4]!, 10),
+      Number.parseInt(m[5]!, 10),
+      Number.parseInt(m[6]!, 10),
+    );
+  }
+  if (tlv.tag === 0x18) {
+    // GeneralizedTime: YYYYMMDDHHMMSSZ
+    const m = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})Z$/.exec(raw);
+    if (!m) throw new Error("Invalid GeneralizedTime");
+    return Date.UTC(
+      Number.parseInt(m[1]!, 10),
+      Number.parseInt(m[2]!, 10) - 1,
+      Number.parseInt(m[3]!, 10),
+      Number.parseInt(m[4]!, 10),
+      Number.parseInt(m[5]!, 10),
+      Number.parseInt(m[6]!, 10),
+    );
+  }
+  throw new Error("Unsupported ASN.1 time tag");
+}
+
+function derEcdsaToRaw(der: Uint8Array, coordSize: 32 | 48): Uint8Array {
+  if (der.length < 8 || der[0] !== 0x30) {
+    throw new Error("Invalid DER ECDSA signature");
+  }
+  const seq = readDerTlv(der, 0);
+  const ints = readDerChildren(der, seq.valueStart, seq.valueEnd);
+  if (ints.length !== 2 || ints[0]!.tag !== 0x02 || ints[1]!.tag !== 0x02) {
+    throw new Error("Invalid DER ECDSA integers");
+  }
+  const norm = (tlv: DerTlv): Uint8Array => {
+    const slice = der.slice(tlv.valueStart, tlv.valueEnd);
+    let start = 0;
+    while (start < slice.length - 1 && slice[start] === 0) {
+      start++;
+    }
+    const trimmed = slice.slice(start);
+    if (trimmed.length > coordSize) {
+      throw new Error("ECDSA scalar too large");
+    }
+    const out = new Uint8Array(coordSize);
+    out.set(trimmed, coordSize - trimmed.length);
+    return out;
+  };
+  return concatBytes(norm(ints[0]!), norm(ints[1]!));
+}
+
+type ParsedX509Cert = {
+  der: Uint8Array;
+  tbsBytes: Uint8Array;
+  sigHash: "SHA-256" | "SHA-384";
+  sigDerBytes: Uint8Array;
+  notBeforeMs: number;
+  notAfterMs: number;
+  spkiBytes: Uint8Array;
+  ecCurve: "P-256" | "P-384";
+};
+
+function parseX509Certificate(der: Uint8Array): ParsedX509Cert {
+  const root = readDerTlv(der, 0);
+  if (root.tag !== 0x30 || root.totalEnd !== der.length) {
+    throw new Error("Invalid X.509 certificate");
+  }
+  const top = readDerChildren(der, root.valueStart, root.valueEnd);
+  if (top.length !== 3) {
+    throw new Error("Invalid X.509 top-level structure");
+  }
+  const tbsTlv = top[0]!;
+  const sigAlgTlv = top[1]!;
+  const sigBitsTlv = top[2]!;
+  if (tbsTlv.tag !== 0x30 || sigAlgTlv.tag !== 0x30 || sigBitsTlv.tag !== 0x03) {
+    throw new Error("Invalid X.509 certificate fields");
+  }
+
+  const tbsBytes = der.slice(root.valueStart, tbsTlv.totalEnd);
+  const sigAlgSlice = der.slice(sigAlgTlv.valueStart, sigAlgTlv.valueEnd);
+  let sigHash: "SHA-256" | "SHA-384";
+  if (findByteSubsequence(sigAlgSlice, OID_ECDSA_SHA256) !== -1) {
+    sigHash = "SHA-256";
+  } else if (findByteSubsequence(sigAlgSlice, OID_ECDSA_SHA384) !== -1) {
+    sigHash = "SHA-384";
+  } else {
+    throw new Error("Unsupported X.509 signature algorithm");
+  }
+
+  if (der[sigBitsTlv.valueStart] !== 0x00) {
+    throw new Error("Invalid X.509 signature bitstring");
+  }
+  const sigDerBytes = der.slice(sigBitsTlv.valueStart + 1, sigBitsTlv.valueEnd);
+
+  const tbsChildren = readDerChildren(der, tbsTlv.valueStart, tbsTlv.valueEnd);
+  let idx = 0;
+  if (tbsChildren[0]?.tag === 0xa0) {
+    idx = 1; // optional version [0]
+  }
+  // serialNumber(idx), signature(idx+1), issuer(idx+2), validity(idx+3), subject(idx+4), spki(idx+5)
+  const validityTlv = tbsChildren[idx + 3];
+  const spkiTlv = tbsChildren[idx + 5];
+  if (!validityTlv || validityTlv.tag !== 0x30 || !spkiTlv || spkiTlv.tag !== 0x30) {
+    throw new Error("Missing X.509 validity or SPKI");
+  }
+  const validityChildren = readDerChildren(der, validityTlv.valueStart, validityTlv.valueEnd);
+  if (validityChildren.length !== 2) {
+    throw new Error("Invalid X.509 validity");
+  }
+  const notBeforeMs = parseAsn1TimeMs(der, validityChildren[0]!);
+  const notAfterMs = parseAsn1TimeMs(der, validityChildren[1]!);
+
+  const spkiBytes = der.slice(spkiTlv.valueStart - spkiTlv.headerLen, spkiTlv.totalEnd);
+  let ecCurve: "P-256" | "P-384";
+  if (findByteSubsequence(spkiBytes, OID_P256) !== -1) {
+    ecCurve = "P-256";
+  } else if (findByteSubsequence(spkiBytes, OID_P384) !== -1) {
+    ecCurve = "P-384";
+  } else {
+    throw new Error("Unsupported X.509 EC curve");
+  }
+
+  return {
+    der,
+    tbsBytes,
+    sigHash,
+    sigDerBytes,
+    notBeforeMs,
+    notAfterMs,
+    spkiBytes,
+    ecCurve,
+  };
+}
+
+async function verifyCertSignedBy(child: ParsedX509Cert, issuer: ParsedX509Cert): Promise<boolean> {
+  const spkiCopy = new Uint8Array(issuer.spkiBytes.byteLength);
+  spkiCopy.set(issuer.spkiBytes);
+  const issuerKey = await crypto.subtle.importKey(
+    "spki",
+    spkiCopy.buffer,
+    { name: "ECDSA", namedCurve: issuer.ecCurve },
+    false,
+    ["verify"],
+  );
+  const coordSize: 32 | 48 = issuer.ecCurve === "P-384" ? 48 : 32;
+  const rawSig = derEcdsaToRaw(child.sigDerBytes, coordSize);
+  const sigCopy = new Uint8Array(rawSig.byteLength);
+  sigCopy.set(rawSig);
+  const tbsCopy = new Uint8Array(child.tbsBytes.byteLength);
+  tbsCopy.set(child.tbsBytes);
+
+  return crypto.subtle.verify(
+    { name: "ECDSA", hash: child.sigHash },
+    issuerKey,
+    sigCopy.buffer,
+    tbsCopy.buffer,
+  );
+}
+
+async function verifyX509ChainAgainstRoot(params: {
+  x5c: Uint8Array[];
+  rootCaDer: Uint8Array;
+  nowMs: number;
+}): Promise<ParsedX509Cert> {
+  const { x5c, rootCaDer, nowMs } = params;
+  if (x5c.length < 2) {
+    throw new Error("x5c chain must contain at least leaf and intermediate certificates");
+  }
+
+  const rootCert = parseX509Certificate(rootCaDer);
+  if (nowMs < rootCert.notBeforeMs || nowMs > rootCert.notAfterMs) {
+    throw new Error("Root CA expired or not yet valid");
+  }
+
+  const certs = x5c.map((der) => parseX509Certificate(der));
+  for (const cert of certs) {
+    if (nowMs < cert.notBeforeMs || nowMs > cert.notAfterMs) {
+      throw new Error("Certificate expired or not yet valid");
+    }
+  }
+
+  for (let i = 0; i < certs.length - 1; i++) {
+    const ok = await verifyCertSignedBy(certs[i]!, certs[i + 1]!);
+    if (!ok) {
+      throw new Error("x5c intermediate signature verification failed");
+    }
+  }
+
+  const last = certs[certs.length - 1]!;
+  if (!constantTimeEqual(last.der, rootCert.der)) {
+    const signedByRoot = await verifyCertSignedBy(last, rootCert);
+    if (!signedByRoot) {
+      throw new Error("x5c chain does not terminate at trusted Apple Root CA");
+    }
+  }
+
+  return certs[0]!;
+}
 
 function findByteSubsequence(haystack: Uint8Array, needle: Uint8Array, start = 0): number {
   outer: for (let i = start; i <= haystack.length - needle.length; i++) {
@@ -418,8 +711,9 @@ function bytesToBase64(bytes: Uint8Array): string {
 
 /**
  * Enrolls an Apple App Attest keypair after validating the attestationObject
- * (format, RP ID hash, signCount === 0, credentialId === SHA-256(publicKey),
- * leaf certificate Apple App Attest extension nonce) and stores it with SET NX.
+ * (format, Apple Root CA x5c chain, AAGUID environment, RP ID hash, signCount === 0,
+ * credentialId === SHA-256(publicKey), leaf cert SPKI binding, and extension nonce)
+ * and stores it atomically with SET NX.
  */
 export async function registerAppleAppAttestKey(params: {
   userId: string;
@@ -460,6 +754,7 @@ export async function registerAppleAppAttestKey(params: {
     };
   }
 
+  let spkiBase64: string;
   try {
     const attBytes = base64ToBytes(attestationObjectBase64);
     const [decoded, endOffset] = decodeCborItem(attBytes, 0);
@@ -479,11 +774,23 @@ export async function registerAppleAppAttestKey(params: {
       throw new Error("Invalid Apple attestation fields");
     }
 
-    const x5c = attStmt.get("x5c");
-    if (!Array.isArray(x5c) || x5c.length === 0 || !(x5c[0] instanceof Uint8Array)) {
-      throw new Error("Missing x5c certificate chain");
+    const rawX5c = attStmt.get("x5c");
+    if (
+      !Array.isArray(rawX5c) ||
+      rawX5c.length < 2 ||
+      !rawX5c.every((item): item is Uint8Array => item instanceof Uint8Array)
+    ) {
+      throw new Error("Invalid x5c certificate chain");
     }
-    const leafCert = x5c[0];
+
+    const rootCaDer = base64ToBytes(
+      deps.appleRootCaDerBase64 ?? APPLE_APP_ATTESTATION_ROOT_CA_DER_BASE64,
+    );
+    const leafCert = await verifyX509ChainAgainstRoot({
+      x5c: rawX5c,
+      rootCaDer,
+      nowMs: (deps.nowMs ?? Date.now)(),
+    });
 
     const expectedRpIdHash = await sha256Bytes(deps.appleAppId);
     if (!constantTimeEqual(authData.slice(0, 32), expectedRpIdHash)) {
@@ -496,6 +803,12 @@ export async function registerAppleAppAttestKey(params: {
     );
     if (signCount !== 0) {
       throw new Error("Initial signCount must be 0");
+    }
+
+    const expectedAaguid =
+      deps.appleEnvironment === "sandbox" ? APPLE_SANDBOX_AAGUID : APPLE_PRODUCTION_AAGUID;
+    if (!constantTimeEqual(authData.slice(37, 53), expectedAaguid)) {
+      throw new Error("App Attest environment AAGUID mismatch");
     }
 
     const credIdLen = new DataView(authData.buffer, authData.byteOffset + 53, 2).getUint16(
@@ -543,12 +856,12 @@ export async function registerAppleAppAttestKey(params: {
 
     const clientDataHash = await sha256Bytes(nonce);
     const expectedCertNonce = await sha256Bytes(concatBytes(authData, clientDataHash));
-    const oidIndex = findByteSubsequence(leafCert, APPLE_ATTEST_OID_BYTES);
+    const oidIndex = findByteSubsequence(leafCert.der, APPLE_ATTEST_OID_BYTES);
     if (oidIndex === -1) {
       throw new Error("Missing Apple App Attest extension OID");
     }
     const nonceMarker = concatBytes(new Uint8Array([0x04, 0x20]), expectedCertNonce);
-    const nonceIndex = findByteSubsequence(leafCert, nonceMarker, oidIndex);
+    const nonceIndex = findByteSubsequence(leafCert.der, nonceMarker, oidIndex);
     if (nonceIndex === -1) {
       throw new Error("Leaf certificate nonce mismatch");
     }
@@ -561,22 +874,10 @@ export async function registerAppleAppAttestKey(params: {
       ["verify"],
     );
     const spki = new Uint8Array(await crypto.subtle.exportKey("spki", imported));
-    const redisKey = `app_attest_key:${userId}:${keyId}`;
-    const stored = await deps.redis.setNxEx(
-      redisKey,
-      60 * 60 * 24 * 365,
-      JSON.stringify({ publicKeySpkiBase64: bytesToBase64(spki), signCount: 0 }),
-    );
-    if (!stored) {
-      return {
-        ok: false,
-        status: 409,
-        error: "attestation_key_already_registered",
-        message: "Device attestation key is already registered.",
-      };
+    if (!constantTimeEqual(leafCert.spkiBytes, spki)) {
+      throw new Error("Leaf certificate SPKI does not match credential public key");
     }
-
-    return { ok: true };
+    spkiBase64 = bytesToBase64(spki);
   } catch {
     return {
       ok: false,
@@ -585,6 +886,34 @@ export async function registerAppleAppAttestKey(params: {
       message: "Device attestation key enrollment failed.",
     };
   }
+
+  const redisKey = `app_attest_key:${userId}:${keyId}`;
+  let stored: boolean;
+  try {
+    stored = await deps.redis.setNxEx(
+      redisKey,
+      60 * 60 * 24 * 365,
+      JSON.stringify({ publicKeySpkiBase64: spkiBase64, signCount: 0 }),
+    );
+  } catch {
+    return {
+      ok: false,
+      status: 503,
+      error: "attestation_unavailable",
+      message: "Unable to store device attestation key right now. Please restart enrollment.",
+    };
+  }
+
+  if (!stored) {
+    return {
+      ok: false,
+      status: 409,
+      error: "attestation_key_already_registered",
+      message: "Device attestation key is already registered.",
+    };
+  }
+
+  return { ok: true };
 }
 
 async function mintGoogleAccessToken(

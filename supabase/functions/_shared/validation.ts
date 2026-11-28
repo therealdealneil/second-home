@@ -35,7 +35,11 @@ export const ICEBREAKER_MAX_LENGTH = 140;
 export const ICEBREAKER_URL_REGEX = /(https?:\/\/|(^|[^a-z0-9])(wa|t)\.me)/i;
 
 export function hasBlockedPhoneNumber(text: string): boolean {
-  return /[0-9]{10,}/.test(text.replace(/[+() .-]/g, ""));
+  const withoutIsoDates = text.replace(
+    /(^|[^0-9])(19|20)[0-9]{2}-[0-9]{2}-[0-9]{2}(?=$|[^0-9])/g,
+    "$1 ",
+  );
+  return /[0-9]{10,}/.test(withoutIsoDates.replace(/[+(). \t\u00A0-]/g, ""));
 }
 
 export const IcebreakerSchema = z

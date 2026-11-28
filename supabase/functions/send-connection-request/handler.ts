@@ -81,49 +81,62 @@ export function createSendConnectionRequestHandler(deps: SendConnectionRequestDe
       );
     }
 
-    const requester = await deps.db.getUserProfile(authUser.id);
-    if (!requester || requester.status !== "active") {
+    let requester: NonNullable<Awaited<ReturnType<typeof deps.db.getUserProfile>>>;
+    let recipient: NonNullable<Awaited<ReturnType<typeof deps.db.getUserProfile>>>;
+    let isVerifiedLocal: boolean;
+    try {
+      const foundRequester = await deps.db.getUserProfile(authUser.id);
+      if (!foundRequester || foundRequester.status !== "active") {
+        return errorResponse(
+          403,
+          "account_not_active",
+          "Your account must be active before sending connection requests.",
+        );
+      }
+      requester = foundRequester;
+
+      const foundRecipient = await deps.db.getUserProfile(parsed.data.recipientId);
+      if (!foundRecipient || foundRecipient.status !== "active") {
+        return errorResponse(404, "recipient_unavailable", "Recipient is not available.");
+      }
+      recipient = foundRecipient;
+
+      if (recipient.household_id === requester.household_id) {
+        return errorResponse(
+          400,
+          "same_household",
+          "You cannot send a connection request to your own household.",
+        );
+      }
+
+      const isBlocked = await deps.db.hasBlockedConnectionWithHousehold(
+        requester.id,
+        recipient.household_id,
+      );
+      if (isBlocked) {
+        return errorResponse(403, "connection_blocked", "Unable to connect with this household.");
+      }
+
+      const hasExisting = await deps.db.hasExistingActiveOrPendingConnection(
+        requester.id,
+        recipient.id,
+      );
+      if (hasExisting) {
+        return errorResponse(
+          409,
+          "connection_already_exists",
+          "A connection request already exists with this neighbor.",
+        );
+      }
+
+      isVerifiedLocal = await deps.db.isHouseholdVerifiedLocal(requester.household_id);
+    } catch {
       return errorResponse(
-        403,
-        "account_not_active",
-        "Your account must be active before sending connection requests.",
+        503,
+        "service_unavailable",
+        "Unable to process connection request right now.",
       );
     }
-
-    const recipient = await deps.db.getUserProfile(parsed.data.recipientId);
-    if (!recipient || recipient.status !== "active") {
-      return errorResponse(404, "recipient_unavailable", "Recipient is not available.");
-    }
-
-    if (recipient.household_id === requester.household_id) {
-      return errorResponse(
-        400,
-        "same_household",
-        "You cannot send a connection request to your own household.",
-      );
-    }
-
-    const isBlocked = await deps.db.hasBlockedConnectionWithHousehold(
-      requester.id,
-      recipient.household_id,
-    );
-    if (isBlocked) {
-      return errorResponse(403, "connection_blocked", "Unable to connect with this household.");
-    }
-
-    const hasExisting = await deps.db.hasExistingActiveOrPendingConnection(
-      requester.id,
-      recipient.id,
-    );
-    if (hasExisting) {
-      return errorResponse(
-        409,
-        "connection_already_exists",
-        "A connection request already exists with this neighbor.",
-      );
-    }
-
-    const isVerifiedLocal = await deps.db.isHouseholdVerifiedLocal(requester.household_id);
     const limit = isVerifiedLocal
       ? CONNECTION_RATE_LIMIT_VERIFIED_LOCAL
       : CONNECTION_RATE_LIMIT_NEW_ACCOUNT;

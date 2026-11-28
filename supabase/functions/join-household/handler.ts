@@ -76,42 +76,54 @@ export function createJoinHouseholdHandler(deps: JoinHouseholdDeps) {
       return gate.response;
     }
 
-    const existingProfile = await deps.db.getUserProfile(authUser.id);
-    if (existingProfile) {
-      return errorResponse(
-        409,
-        "user_already_in_household",
-        "Account already belongs to a household.",
-      );
-    }
-
-    const household = await deps.db.getHouseholdByInviteCode(parsed.data.inviteCode);
-    if (!household) {
-      return errorResponse(404, "invalid_invite_code", "Household invite code was not found.");
-    }
-
-    const householdExact = parsePostgisPoint(household.exact_current_geog);
-    if (!householdExact) {
-      return errorResponse(
-        500,
-        "household_location_invalid",
-        "Unable to verify household location.",
-      );
-    }
-
+    let household: NonNullable<Awaited<ReturnType<typeof deps.db.getHouseholdByInviteCode>>>;
+    let hometown: NonNullable<Awaited<ReturnType<typeof deps.db.getGujaratLocation>>>;
     const joinerPoint = { lat: parsed.data.gps.lat, lng: parsed.data.gps.lng };
-    const proximity = isWithinHouseholdJoinProximity(joinerPoint, householdExact);
-    if (!proximity.withinProximity) {
-      return errorResponse(
-        403,
-        "outside_household_proximity",
-        "Your live GPS must be within 25 miles of the household to join with an invite code.",
-      );
-    }
+    try {
+      const existingProfile = await deps.db.getUserProfile(authUser.id);
+      if (existingProfile) {
+        return errorResponse(
+          409,
+          "user_already_in_household",
+          "Account already belongs to a household.",
+        );
+      }
 
-    const hometown = await deps.db.getGujaratLocation(parsed.data.hometownLocationId);
-    if (!hometown) {
-      return errorResponse(400, "invalid_hometown_location", "Unknown Gujarat hometown location.");
+      const foundHousehold = await deps.db.getHouseholdByInviteCode(parsed.data.inviteCode);
+      if (!foundHousehold) {
+        return errorResponse(404, "invalid_invite_code", "Household invite code was not found.");
+      }
+      household = foundHousehold;
+
+      const householdExact = parsePostgisPoint(household.exact_current_geog);
+      if (!householdExact) {
+        return errorResponse(
+          500,
+          "household_location_invalid",
+          "Unable to verify household location.",
+        );
+      }
+
+      const proximity = isWithinHouseholdJoinProximity(joinerPoint, householdExact);
+      if (!proximity.withinProximity) {
+        return errorResponse(
+          403,
+          "outside_household_proximity",
+          "Your live GPS must be within 25 miles of the household to join with an invite code.",
+        );
+      }
+
+      const foundHometown = await deps.db.getGujaratLocation(parsed.data.hometownLocationId);
+      if (!foundHometown) {
+        return errorResponse(
+          400,
+          "invalid_hometown_location",
+          "Unknown Gujarat hometown location.",
+        );
+      }
+      hometown = foundHometown;
+    } catch {
+      return errorResponse(503, "service_unavailable", "Unable to join household right now.");
     }
 
     try {

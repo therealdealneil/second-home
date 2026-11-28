@@ -82,18 +82,28 @@ export function createCreateHouseholdHandler(deps: CreateHouseholdDeps) {
       return gate.response;
     }
 
-    const existingProfile = await deps.db.getUserProfile(authUser.id);
-    if (existingProfile) {
-      return errorResponse(
-        409,
-        "user_already_in_household",
-        "Account already belongs to a household.",
-      );
-    }
+    let existingProfile: Awaited<ReturnType<typeof deps.db.getUserProfile>>;
+    let hometown: Awaited<ReturnType<typeof deps.db.getGujaratLocation>>;
+    try {
+      existingProfile = await deps.db.getUserProfile(authUser.id);
+      if (existingProfile) {
+        return errorResponse(
+          409,
+          "user_already_in_household",
+          "Account already belongs to a household.",
+        );
+      }
 
-    const hometown = await deps.db.getGujaratLocation(parsed.data.hometownLocationId);
-    if (!hometown) {
-      return errorResponse(400, "invalid_hometown_location", "Unknown Gujarat hometown location.");
+      hometown = await deps.db.getGujaratLocation(parsed.data.hometownLocationId);
+      if (!hometown) {
+        return errorResponse(
+          400,
+          "invalid_hometown_location",
+          "Unknown Gujarat hometown location.",
+        );
+      }
+    } catch {
+      return errorResponse(503, "service_unavailable", "Unable to create household right now.");
     }
 
     const exactPoint = { lat: parsed.data.gps.lat, lng: parsed.data.gps.lng };
@@ -124,8 +134,9 @@ export function createCreateHouseholdHandler(deps: CreateHouseholdDeps) {
         lastVerifiedAt: new Date(gate.nowMs).toISOString(),
       });
     } catch (err) {
-      const code = (err as { code?: string }).code;
-      if (code === "23505") {
+      const pgErr = err as { code?: string; details?: string; messageDetail?: string };
+      const detailText = `${pgErr.details ?? ""} ${pgErr.messageDetail ?? ""}`;
+      if (pgErr.code === "23505" && !detailText.includes("households_invite_code_key")) {
         return errorResponse(
           409,
           "user_already_in_household",

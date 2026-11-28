@@ -1092,11 +1092,99 @@ describe("Edge Function handlers", () => {
     );
     expect(outageRes.status).toBe(503);
 
-    // 4. Apple App Attest key enrollment via POST /auth-challenge + atomic counter guard
+    // 4. Apple App Attest key enrollment via POST /auth-challenge + X.509 chain + AAGUID + atomic counter
+    const derWrap = (tag: number, content: Uint8Array): Uint8Array => {
+      const len = content.length;
+      const header =
+        len < 128
+          ? new Uint8Array([tag, len])
+          : len < 256
+            ? new Uint8Array([tag, 0x81, len])
+            : new Uint8Array([tag, 0x82, (len >> 8) & 0xff, len & 0xff]);
+      const out = new Uint8Array(header.length + len);
+      out.set(header, 0);
+      out.set(content, header.length);
+      return out;
+    };
+    const concatAll = (...parts: Uint8Array[]): Uint8Array => {
+      const total = parts.reduce((acc, p) => acc + p.length, 0);
+      const out = new Uint8Array(total);
+      let off = 0;
+      for (const p of parts) {
+        out.set(p, off);
+        off += p.length;
+      }
+      return out;
+    };
+    const buildTestX509Cert = async (params: {
+      subjectSpki: Uint8Array;
+      issuerPrivateKey: CryptoKey;
+      extraExtension?: Uint8Array;
+    }): Promise<Uint8Array> => {
+      const sigAlg = new Uint8Array([
+        0x30, 0x0a, 0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x04, 0x03, 0x02,
+      ]);
+      const serial = new Uint8Array([0x02, 0x01, 0x01]);
+      const nameSeq = new Uint8Array([0x30, 0x00]);
+      const encAscii = (s: string) => new TextEncoder().encode(s);
+      const validity = derWrap(
+        0x30,
+        concatAll(
+          derWrap(0x17, encAscii("250101000000Z")),
+          derWrap(0x17, encAscii("350101000000Z")),
+        ),
+      );
+      const tbsChildren = [serial, sigAlg, nameSeq, validity, nameSeq, params.subjectSpki];
+      if (params.extraExtension) {
+        tbsChildren.push(derWrap(0xa3, derWrap(0x30, params.extraExtension)));
+      }
+      const tbs = derWrap(0x30, concatAll(...tbsChildren));
+      const tbsCopy = new Uint8Array(tbs.byteLength);
+      tbsCopy.set(tbs);
+      const rawSig = new Uint8Array(
+        await crypto.subtle.sign(
+          { name: "ECDSA", hash: "SHA-256" },
+          params.issuerPrivateKey,
+          tbsCopy.buffer,
+        ),
+      );
+      const derSig = rawP256ToDer(rawSig);
+      const sigBitString = derWrap(0x03, concatAll(new Uint8Array([0x00]), derSig));
+      return derWrap(0x30, concatAll(tbs, sigAlg, sigBitString));
+    };
+
+    const rootCaKey = await crypto.subtle.generateKey(
+      { name: "ECDSA", namedCurve: "P-256" },
+      true,
+      ["sign", "verify"],
+    );
+    const rootCaSpki = new Uint8Array(await crypto.subtle.exportKey("spki", rootCaKey.publicKey));
+    const rootCaCert = await buildTestX509Cert({
+      subjectSpki: rootCaSpki,
+      issuerPrivateKey: rootCaKey.privateKey,
+    });
+    let rootBin = "";
+    for (const b of rootCaCert) rootBin += String.fromCharCode(b);
+    const rootCaDerBase64 = btoa(rootBin);
+
+    const untrustedKey = await crypto.subtle.generateKey(
+      { name: "ECDSA", namedCurve: "P-256" },
+      true,
+      ["sign", "verify"],
+    );
+    const untrustedSpki = new Uint8Array(
+      await crypto.subtle.exportKey("spki", untrustedKey.publicKey),
+    );
+    const untrustedCert = await buildTestX509Cert({
+      subjectSpki: untrustedSpki,
+      issuerPrivateKey: untrustedKey.privateKey,
+    });
+
     const ecKey = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
       "sign",
       "verify",
     ]);
+    const leafSpki = new Uint8Array(await crypto.subtle.exportKey("spki", ecKey.publicKey));
     const rawPub = new Uint8Array(await crypto.subtle.exportKey("raw", ecKey.publicKey));
     const xCoord = rawPub.slice(1, 33);
     const yCoord = rawPub.slice(33, 65);
@@ -1108,11 +1196,12 @@ describe("Edge Function handlers", () => {
     const enc = new TextEncoder();
     const cborBytes = (b: Uint8Array) => {
       const header =
-        b.length < 24 ? new Uint8Array([0x40 | b.length]) : new Uint8Array([0x58, b.length]);
-      const out = new Uint8Array(header.length + b.length);
-      out.set(header, 0);
-      out.set(b, header.length);
-      return out;
+        b.length < 24
+          ? new Uint8Array([0x40 | b.length])
+          : b.length < 256
+            ? new Uint8Array([0x58, b.length])
+            : new Uint8Array([0x59, (b.length >> 8) & 0xff, b.length & 0xff]);
+      return concatAll(header, b);
     };
     const cborText = (t: string) => {
       const b = enc.encode(t);
@@ -1124,69 +1213,204 @@ describe("Edge Function handlers", () => {
     const coseKeyCbor = new Uint8Array([
       0xa5,
       0x01,
-      0x02, // 1 (kty): 2 (EC2)
+      0x02,
       0x03,
-      0x26, // 3 (alg): -7 (ES256)
+      0x26,
       0x20,
-      0x01, // -1 (crv): 1 (P-256)
+      0x01,
       0x21,
-      ...cborBytes(xCoord), // -2 (x)
+      ...cborBytes(xCoord),
       0x22,
-      ...cborBytes(yCoord), // -3 (y)
+      ...cborBytes(yCoord),
     ]);
 
     const rpIdHash = await sha256Bytes(APPLE_APP_ID);
-    const authData = new Uint8Array(55 + credId.length + coseKeyCbor.length);
-    authData.set(rpIdHash, 0);
-    authData[32] = 0x41; // AT + UP
-    new DataView(authData.buffer).setUint32(33, 0, false); // signCount = 0
-    new DataView(authData.buffer).setUint16(53, credId.length, false);
-    authData.set(credId, 55);
-    authData.set(coseKeyCbor, 55 + credId.length);
-
-    const regNonce = "reg_nonce_0123456789abcdef";
-    await redis.client.setEx(`auth_nonce:${USER_A}:${regNonce}`, 60, "1");
-    const certNonce = await sha256Bytes(
-      new Uint8Array([...authData, ...(await sha256Bytes(regNonce))]),
-    );
-    const mockLeafCert = new Uint8Array([
-      0x30,
-      0x30,
-      0x06,
-      0x09,
-      0x2a,
-      0x86,
-      0x48,
-      0x86,
-      0xf7,
-      0x63,
-      0x64,
-      0x08,
-      0x02,
-      0x04,
-      0x20,
-      ...certNonce,
-    ]);
-    const attObj = new Uint8Array([
-      0xa3,
-      ...cborText("fmt"),
-      ...cborText("apple-appattest"),
-      ...cborText("attStmt"),
-      0xa1,
-      ...cborText("x5c"),
-      0x81,
-      ...cborBytes(mockLeafCert),
-      ...cborText("authData"),
-      ...cborBytes(authData),
-    ]);
-    let attBin = "";
-    for (const b of attObj) attBin += String.fromCharCode(b);
+    const makeAuthData = (aaguidStr: string) => {
+      const ad = new Uint8Array(55 + credId.length + coseKeyCbor.length);
+      ad.set(rpIdHash, 0);
+      ad[32] = 0x41;
+      new DataView(ad.buffer).setUint32(33, 0, false);
+      ad.set(enc.encode(aaguidStr), 37);
+      new DataView(ad.buffer).setUint16(53, credId.length, false);
+      ad.set(credId, 55);
+      ad.set(coseKeyCbor, 55 + credId.length);
+      return ad;
+    };
 
     const challengeHandler = createAuthChallengeHandler({
       db,
       redis: redis.client,
-      attestation: { redis: redis.client, mode: "enforce", appleAppId: APPLE_APP_ID },
+      nowMs: () => Date.UTC(2026, 10, 28),
+      attestation: {
+        redis: redis.client,
+        mode: "enforce",
+        appleAppId: APPLE_APP_ID,
+        appleRootCaDerBase64: rootCaDerBase64,
+        appleEnvironment: "production",
+        nowMs: () => Date.UTC(2026, 10, 28),
+      },
     });
+
+    // POST /auth-challenge with `{}` issues a nonce (200)
+    const emptyPostNonceRes = await challengeHandler(
+      new Request("https://edge.local/auth-challenge", {
+        method: "POST",
+        headers: { Authorization: "Bearer jwt-a", "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      }),
+    );
+    expect(emptyPostNonceRes.status).toBe(200);
+
+    // Untrusted x5c chain -> 403
+    const badNonce = "bad_nonce_0123456789abcdef";
+    await redis.client.setEx(`auth_nonce:${USER_A}:${badNonce}`, 60, "1");
+    const prodAuthData = makeAuthData("appattest\0\0\0\0\0\0\0");
+    const badCertNonce = await sha256Bytes(concatAll(prodAuthData, await sha256Bytes(badNonce)));
+    const badLeafCert = await buildTestX509Cert({
+      subjectSpki: leafSpki,
+      issuerPrivateKey: untrustedKey.privateKey,
+      extraExtension: new Uint8Array([
+        0x06,
+        0x09,
+        0x2a,
+        0x86,
+        0x48,
+        0x86,
+        0xf7,
+        0x63,
+        0x64,
+        0x08,
+        0x02,
+        0x04,
+        0x20,
+        ...badCertNonce,
+      ]),
+    });
+    const badAttObj = concatAll(
+      new Uint8Array([0xa3]),
+      cborText("fmt"),
+      cborText("apple-appattest"),
+      cborText("attStmt"),
+      new Uint8Array([0xa1]),
+      cborText("x5c"),
+      new Uint8Array([0x82]),
+      cborBytes(badLeafCert),
+      cborBytes(untrustedCert),
+      cborText("authData"),
+      cborBytes(prodAuthData),
+    );
+    let badAttBin = "";
+    for (const b of badAttObj) badAttBin += String.fromCharCode(b);
+    const badRegRes = await challengeHandler(
+      new Request("https://edge.local/auth-challenge", {
+        method: "POST",
+        headers: { Authorization: "Bearer jwt-a", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "register_apple_key",
+          keyId,
+          attestationObject: btoa(badAttBin),
+          nonce: badNonce,
+        }),
+      }),
+    );
+    expect(badRegRes.status).toBe(403);
+
+    // Sandbox AAGUID in production mode -> 403
+    const sandboxNonce = "sbx_nonce_0123456789abcdef";
+    await redis.client.setEx(`auth_nonce:${USER_A}:${sandboxNonce}`, 60, "1");
+    const sandboxAuthData = makeAuthData("appattestdevelop");
+    const sandboxCertNonce = await sha256Bytes(
+      concatAll(sandboxAuthData, await sha256Bytes(sandboxNonce)),
+    );
+    const sandboxLeafCert = await buildTestX509Cert({
+      subjectSpki: leafSpki,
+      issuerPrivateKey: rootCaKey.privateKey,
+      extraExtension: new Uint8Array([
+        0x06,
+        0x09,
+        0x2a,
+        0x86,
+        0x48,
+        0x86,
+        0xf7,
+        0x63,
+        0x64,
+        0x08,
+        0x02,
+        0x04,
+        0x20,
+        ...sandboxCertNonce,
+      ]),
+    });
+    const sandboxAttObj = concatAll(
+      new Uint8Array([0xa3]),
+      cborText("fmt"),
+      cborText("apple-appattest"),
+      cborText("attStmt"),
+      new Uint8Array([0xa1]),
+      cborText("x5c"),
+      new Uint8Array([0x82]),
+      cborBytes(sandboxLeafCert),
+      cborBytes(rootCaCert),
+      cborText("authData"),
+      cborBytes(sandboxAuthData),
+    );
+    let sbxBin = "";
+    for (const b of sandboxAttObj) sbxBin += String.fromCharCode(b);
+    const sbxRegRes = await challengeHandler(
+      new Request("https://edge.local/auth-challenge", {
+        method: "POST",
+        headers: { Authorization: "Bearer jwt-a", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "register_apple_key",
+          keyId,
+          attestationObject: btoa(sbxBin),
+          nonce: sandboxNonce,
+        }),
+      }),
+    );
+    expect(sbxRegRes.status).toBe(403);
+
+    // Valid production chain + AAGUID -> 201
+    const regNonce = "reg_nonce_0123456789abcdef";
+    await redis.client.setEx(`auth_nonce:${USER_A}:${regNonce}`, 60, "1");
+    const certNonce = await sha256Bytes(concatAll(prodAuthData, await sha256Bytes(regNonce)));
+    const validLeafCert = await buildTestX509Cert({
+      subjectSpki: leafSpki,
+      issuerPrivateKey: rootCaKey.privateKey,
+      extraExtension: new Uint8Array([
+        0x06,
+        0x09,
+        0x2a,
+        0x86,
+        0x48,
+        0x86,
+        0xf7,
+        0x63,
+        0x64,
+        0x08,
+        0x02,
+        0x04,
+        0x20,
+        ...certNonce,
+      ]),
+    });
+    const attObj = concatAll(
+      new Uint8Array([0xa3]),
+      cborText("fmt"),
+      cborText("apple-appattest"),
+      cborText("attStmt"),
+      new Uint8Array([0xa1]),
+      cborText("x5c"),
+      new Uint8Array([0x82]),
+      cborBytes(validLeafCert),
+      cborBytes(rootCaCert),
+      cborText("authData"),
+      cborBytes(prodAuthData),
+    );
+    let attBin = "";
+    for (const b of attObj) attBin += String.fromCharCode(b);
+
     const regRes = await challengeHandler(
       new Request("https://edge.local/auth-challenge", {
         method: "POST",
@@ -1205,5 +1429,31 @@ describe("Edge Function handlers", () => {
     const redisKey = `app_attest_key:${USER_A}:${keyId}`;
     expect(await redis.client.compareAndAdvanceCounter(redisKey, 1, 3600)).toBe(true);
     expect(await redis.client.compareAndAdvanceCounter(redisKey, 1, 3600)).toBe(false);
+
+    // 5. DB read failure in send-connection-request maps to 503 service_unavailable
+    const failingDb: EdgeDbAdapter = {
+      ...db,
+      async getUserProfile() {
+        throw new Error("DB read timeout");
+      },
+    };
+    const dbErrNonce = "dberr_nonce_1234567890";
+    await redis.client.setEx(`auth_nonce:${USER_A}:${dbErrNonce}`, 60, "1");
+    const dbErrHandler = createSendConnectionRequestHandler({
+      db: failingDb,
+      redis: redis.client,
+      attestation: { redis: redis.client, mode: "dev_bypass" },
+    });
+    const dbErrRes = await dbErrHandler(
+      new Request("https://edge.local/send-connection-request", {
+        method: "POST",
+        headers: { Authorization: "Bearer jwt-a", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          attestation: { platform: "android", nonce: dbErrNonce, token: "t", payloadHash },
+          ...connBody,
+        }),
+      }),
+    );
+    expect(dbErrRes.status).toBe(503);
   });
 });

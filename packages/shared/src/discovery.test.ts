@@ -23,6 +23,7 @@ describe("icebreaker anti-abuse validation", () => {
       ok: true,
       text: "Kem cho! Lived in Ahmedabad 2015-2020, now near Med Center.",
     });
+    expect(validateIcebreaker("Meet 2026-11-28 - 10 am near Medical Center?").ok).toBe(true);
   });
 
   it("rejects empty, overly long, link-containing, or phone-containing notes", () => {
@@ -36,6 +37,7 @@ describe("icebreaker anti-abuse validation", () => {
 
     expect(validateIcebreaker("Call +1 (210) 555-0199").ok).toBe(false);
     expect(validateIcebreaker("Call +1 (210) 555 - 1234").ok).toBe(false);
+    expect(validateIcebreaker("Call +1\u00A0(210)\u00A0555\u00A0-\u00A01234").ok).toBe(false);
     expect(validateIcebreaker("Call (210) 555-0199").ok).toBe(false);
     expect(validateIcebreaker("Text me 210 555 0199").ok).toBe(false);
     expect(validateIcebreaker("My number is 2105550199").ok).toBe(false);

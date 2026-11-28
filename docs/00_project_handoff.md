@@ -75,7 +75,7 @@ Please execute the build in the following order, strictly adhering to the rules 
 
 ### Step 3: Implement Edge Security, Attestation & Backend APIs (`docs/04`)
 1. Build Supabase Edge Functions for:
-   - `GET /auth-challenge`: Issues single-use 60-second nonces in Upstash Redis.
+   - `GET/POST /auth-challenge`: Issues single-use 60-second nonces in Upstash Redis (and handles Apple App Attest key enrollment on `POST` with `action: "register_apple_key"`).
    - `POST /create-household` & `POST /join-household`: Verifies Apple App Attest / Google Play Integrity tokens, rejects mock GPS flags, validates the Greater San Antonio bounding polygon, validates coordinate precision (`accuracy_meters`) & Impossible Travel (`>600 mph` vs. `last_verified_at`), computes a **one-time static 0.5–1.5 mile offset** for `public_current_geog`, computes `h3_index_res7`, and enforces the 25-mile proximity check when joining an existing household via `invite_code`.
    - `POST /send-connection-request`: Verifies device attestation + single-use 60s nonce, enforces outbound request rate limits (`10/24h` new accounts, `25/24h` `Verified Local`), and filters URLs/phone numbers in icebreakers.
 2. Add Upstash Redis sliding-window rate limits for Map Pan/Query (`30 req/min` authenticated, `10 req/min` anon web) and SMS OTP sends (`3/hr` per phone and device attestation ID).

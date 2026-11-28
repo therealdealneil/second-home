@@ -28,11 +28,14 @@ export function loadEdgeRuntimeEnv(options: { needAttestation?: boolean } = {}):
 
   const rawMode = Deno.env.get("ATTESTATION_MODE")?.trim();
   const mode: AttestationMode = rawMode === "dev_bypass" ? "dev_bypass" : "enforce";
+  const rawAppleEnv = Deno.env.get("APPLE_APP_ATTEST_ENV")?.trim();
+  const appleEnvironment = rawAppleEnv === "sandbox" ? "sandbox" : "production";
 
   const attestation: AttestationDeps = {
     redis,
     mode,
     appleAppId: options.needAttestation ? Deno.env.get("APPLE_APP_ID")?.trim() : undefined,
+    appleEnvironment,
     googlePackageName: options.needAttestation
       ? Deno.env.get("GOOGLE_PLAY_PACKAGE_NAME")?.trim()
       : undefined,

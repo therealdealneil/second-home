@@ -65,24 +65,38 @@ export function createAuthChallengeHandler(deps: AuthChallengeDeps) {
         if (!bodyResult.ok) {
           return bodyResult.response;
         }
-        const parsed = RegisterAppleKeySchema.safeParse(bodyResult.data);
-        if (!parsed.success) {
-          return errorResponse(400, "invalid_request", "Invalid Apple key enrollment payload.");
+        const maybeObj = bodyResult.data;
+        const hasAction =
+          typeof maybeObj === "object" &&
+          maybeObj !== null &&
+          !Array.isArray(maybeObj) &&
+          "action" in maybeObj &&
+          (maybeObj as { action?: unknown }).action !== undefined;
+
+        if (hasAction) {
+          const parsed = RegisterAppleKeySchema.safeParse(maybeObj);
+          if (!parsed.success) {
+            return errorResponse(400, "invalid_request", "Invalid Apple key enrollment payload.");
+          }
+          if (!deps.attestation) {
+            return errorResponse(
+              503,
+              "attestation_unavailable",
+              "Key enrollment is not configured.",
+            );
+          }
+          const regResult = await registerAppleAppAttestKey({
+            userId: user.id,
+            keyId: parsed.data.keyId,
+            attestationObjectBase64: parsed.data.attestationObject,
+            nonce: parsed.data.nonce,
+            deps: deps.attestation,
+          });
+          if (!regResult.ok) {
+            return errorResponse(regResult.status, regResult.error, regResult.message);
+          }
+          return jsonResponse({ registered: true, keyId: parsed.data.keyId }, 201);
         }
-        if (!deps.attestation) {
-          return errorResponse(503, "attestation_unavailable", "Key enrollment is not configured.");
-        }
-        const regResult = await registerAppleAppAttestKey({
-          userId: user.id,
-          keyId: parsed.data.keyId,
-          attestationObjectBase64: parsed.data.attestationObject,
-          nonce: parsed.data.nonce,
-          deps: deps.attestation,
-        });
-        if (!regResult.ok) {
-          return errorResponse(regResult.status, regResult.error, regResult.message);
-        }
-        return jsonResponse({ registered: true, keyId: parsed.data.keyId }, 201);
       }
     }
 
