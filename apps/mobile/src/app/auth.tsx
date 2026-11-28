@@ -67,7 +67,7 @@ export default function SoftAuthSheet() {
       const { user } = await signInWithApple();
       if (user.phone_confirmed_at) {
         const result = await activateVerifiedAccount();
-        completeAuth(result.status);
+        completeAuth(result.status, user.id);
         dismissOrReturnHome(router);
         return;
       }
@@ -89,7 +89,7 @@ export default function SoftAuthSheet() {
       const { user } = await signInWithGoogle();
       if (user.phone_confirmed_at) {
         const result = await activateVerifiedAccount();
-        completeAuth(result.status);
+        completeAuth(result.status, user.id);
         dismissOrReturnHome(router);
         return;
       }

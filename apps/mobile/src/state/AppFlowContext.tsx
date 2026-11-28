@@ -45,7 +45,7 @@ type AppFlowContextValue = {
   dispatch: React.Dispatch<AppFlowAction>;
   confirmNeighborhood: (neighborhood: ConfirmedNeighborhood) => void;
   openAuthForIntent: (intent: PendingAuthIntent) => void;
-  completeAuth: (status?: ActivationStatus) => void;
+  completeAuth: (status?: ActivationStatus, userId?: string) => void;
   completePersonalization: (draft?: PersonalizationDraft) => void;
   updateFilters: (filters: Partial<DiscoveryFilters>) => void;
   setMapRegion: (region: MapRegion) => void;
@@ -75,6 +75,7 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
   const [scopedAccountStatus, setScopedAccountStatus] = useState<ScopedAccountStatus | null>(null);
   const userMutatedBeforeHydrationRef = useRef(false);
   const authSyncGenerationRef = useRef(0);
+  const currentUserIdRef = useRef<string | null>(null);
 
   const accountStatus: ActivationStatus | null =
     authSession?.user && scopedAccountStatus?.userId === authSession.user.id
@@ -96,6 +97,7 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
       }
       setAuthSession(session);
       setHasResolvedSession(true);
+      currentUserIdRef.current = session?.user?.id ?? null;
       if (!session?.user) {
         setScopedAccountStatus(null);
         return;
@@ -215,16 +217,18 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
   );
 
   const completeAuth = useCallback(
-    (status?: ActivationStatus) => {
+    (status?: ActivationStatus, userId?: string) => {
       if (status) {
         authSyncGenerationRef.current += 1;
-        if (authSession?.user?.id) {
-          setScopedAccountStatus({ userId: authSession.user.id, status });
+        const resolvedUserId = userId ?? currentUserIdRef.current;
+        if (resolvedUserId) {
+          currentUserIdRef.current = resolvedUserId;
+          setScopedAccountStatus({ userId: resolvedUserId, status });
         }
       }
       trackedDispatch({ type: "COMPLETE_AUTH" });
     },
-    [authSession, trackedDispatch],
+    [trackedDispatch],
   );
 
   const completePersonalization = useCallback(
@@ -308,6 +312,7 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
 
   const resetPrototypeFlow = useCallback(() => {
     authSyncGenerationRef.current += 1;
+    currentUserIdRef.current = null;
     setCanPersist(true);
     setAuthSession(null);
     setScopedAccountStatus(null);
