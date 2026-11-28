@@ -17,23 +17,16 @@ Before pushing or opening a PR, run the following checks:
 - **Issue Linking:** Extract any Jira/GitHub issue ID from the branch name or prompt and link it cleanly.
 
 ## Step 3: PR Description Structure
-Generate the PR body using the exact sections below. Omit a section only if explicitly not applicable (write "None" rather than deleting required headers like **Breaking Changes** or **Testing**):
+Generate the PR body using the exact sections below. Do not use Markdown task checkboxes (`- [ ]`) anywhere in the PR body so GitHub does not render a task completion counter.
 
 ### Template
 
 ## Summary
 - 2–4 concise bullet points explaining **what** changed and **why** (business or architectural motivation). Focus on behavior and design decisions rather than listing every modified file.
 
-## Related Issue
-- Refs: `<TICKET-ID>` (or `Closes #<issue-number>`)
-
-## Type of Change
-- [ ] `feat` — New feature or capability
-- [ ] `fix` — Bug fix
-- [ ] `refactor` — Code restructuring without behavior change
-- [ ] `perf` — Performance improvement
-- [ ] `test` — Adding or updating tests
-- [ ] `chore` / `ci` / `docs` — Build, tooling, CI/CD, or documentation
+## Metadata
+- **Type:** `<feat | fix | refactor | perf | test | chore | ci | docs>` *(keep only the applicable type(s))*
+- **Related Issue:** `<TICKET-ID>` (or `Closes #<issue-number>`)
 
 ## Key Changes & Architecture Notes
 - Briefly highlight non-obvious implementation details, new dependencies, schema/API contract updates, or infrastructure changes reviewers should scrutinize.

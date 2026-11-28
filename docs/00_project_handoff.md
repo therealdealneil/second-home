@@ -73,16 +73,28 @@ Please execute the build in the following order, strictly adhering to the rules 
    - Household bottom sheet showing all linked members, trust badges (`Verified Local`, `Vouched by Neighbors`), 1-tap icebreakers, and WhatsApp handoff (`wa.me`) upon acceptance.
    - *RPC note for multi-origin households:* In `find_matching_households` (Step 1), filtering `u.hometown_geog` in the `WHERE` clause before `JSONB_AGG` returns only the member(s) matching the searched hometown (e.g., searching Ahmedabad returns only the Ahmedabad spouse of a mixed Ahmedabad/Vadodara household). To show **all** linked active members in the Household Bottom Sheet once a household matches, add a follow-up migration in Step 2 using an `EXISTS` subquery for the hometown/age filter and aggregating all active members of the matched household.
 
-### Step 3: Implement Edge Security & Attestation (`docs/04`)
+### Step 3: Implement Edge Security, Attestation & Backend APIs (`docs/04`)
 1. Build Supabase Edge Functions for:
    - `GET /auth-challenge`: Issues single-use 60-second nonces in Upstash Redis.
-   - `POST /create-household` & `POST /join-household`: Verifies Apple App Attest / Google Play Integrity tokens, rejects mock GPS flags, validates the Greater San Antonio bounding polygon, computes a **one-time static 0.5–1.5 mile offset** for `public_current_geog`, computes `h3_index_res7`, and enforces the 25-mile proximity check when joining an existing household via `invite_code`.
-2. Add the `user_reports` table and auto-quarantine trigger (`>= 3` reports from `Verified Local` users).
+   - `POST /create-household` & `POST /join-household`: Verifies Apple App Attest / Google Play Integrity tokens, rejects mock GPS flags, validates the Greater San Antonio bounding polygon, validates coordinate precision (`accuracy_meters`) & Impossible Travel (`>600 mph` vs. `last_verified_at`), computes a **one-time static 0.5–1.5 mile offset** for `public_current_geog`, computes `h3_index_res7`, and enforces the 25-mile proximity check when joining an existing household via `invite_code`.
+   - `POST /send-connection-request`: Verifies device attestation + single-use 60s nonce, enforces outbound request rate limits (`10/24h` new accounts, `25/24h` `Verified Local`), and filters URLs/phone numbers in icebreakers.
+2. Add Upstash Redis sliding-window rate limits for Map Pan/Query (`30 req/min` authenticated, `10 req/min` anon web) and SMS OTP sends (`3/hr` per phone and device attestation ID).
+3. Add backend tables, RPCs, and triggers for:
+   - `user_reports` table and auto-quarantine trigger (`>= 3` reports from `Verified Local` users).
+   - Pre-auth blurred preview access (Supabase Anonymous Auth or a rate-limited aggregate-only preview endpoint returning counts and fuzzed centers without member profiles).
+   - Server-backed social/trust mutations: connection acceptance/decline, 1-tap block (`connections.status = 'blocked'`), Ghost Mode (`users.status = 'paused'`), `hometown_vouches` (enforcing the 48-hour post-acceptance gate), `Verified Local` / `Hometown Visit` GPS heartbeat verification, and `waitlist_signups` (`F-17`).
 
 ### Step 4: Build the Web Viral Preview App (`apps/web`)
 1. Build a fast, SEO-friendly Next.js map page querying `web_h3_density_view`.
 2. Allow visitors to pick a Gujarat hometown/district and explore San Antonio H3 hex clusters.
 3. Render a dynamic QR code encoding `?origin_id=<location_id>` that deep-links desktop visitors into the mobile app.
+4. Serve `/.well-known/apple-app-site-association` and `/.well-known/assetlinks.json` on `secondhome.app` so Universal Links and Android App Links (`autoVerify: true`) launch the native app directly.
+
+### Step 5: Wire Live Mobile Client, Alerts & Production Launch Readiness
+1. **Supabase Client & Real Auth (`apps/mobile`):** Install `@supabase/supabase-js` and `expo-secure-store`, replace `completeMockAuth()` / demo `"123456"` OTP with real Apple/Google Sign-In + SMS OTP (`users.phone_e164`), sync `onAuthStateChange` sessions, and add sign-out + in-app **Delete Account** flow (App Store compliance).
+2. **Live Discovery & Social Loops:** Replace local mock fixtures (`mockHouseholds.ts`, `MOCK_MEMBER_PHONES_E164`, `AsyncStorage`-only social state) with live `find_matching_households`, `get_whatsapp_handoff_link`, real `users`/`households` profile & `invite_code` persistence, an incoming connection requests UI (Accept/Decline), live block/vouch/report/Ghost Mode/waitlist mutations, and forwarding `position.coords.accuracy` from `useSanAntonioLocation`.
+3. **Notifications & Growth Alerts (`F-14`):** Wire `expo-notifications` and device push-token registration for connection requests/acceptances, plus opt-in WhatsApp Business API match alerts (`F-14`).
+4. **Production Hardening & Release Compliance:** Remove or gate prototype scaffolds (`SEEDED_CONNECTIONS`, `Simulate Mutual Accept`, `Fill Demo (123456)`, `DEV GPS`, `resetPrototypeFlow`), add error telemetry and loading/retry/offline states, configure `eas.json` release profiles and restricted Mapbox tokens, add Privacy Policy / Terms of Service / SMS OTP consent disclosures, and run live Supabase integration tests verifying RLS column locks (`exact_current_geog`, `phone_e164`).
 
 ---
 
