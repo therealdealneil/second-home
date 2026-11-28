@@ -4,6 +4,20 @@ import { Platform } from "react-native";
 
 const CHUNK_SIZE = 1800;
 
+const keyQueues = new Map<string, Promise<unknown>>();
+
+function enqueueKeyOp<T>(key: string, op: () => Promise<T>): Promise<T> {
+  const prev = keyQueues.get(key) ?? Promise.resolve();
+  const next = prev.catch(() => undefined).then(op);
+  keyQueues.set(key, next);
+  void next.finally(() => {
+    if (keyQueues.get(key) === next) {
+      keyQueues.delete(key);
+    }
+  });
+  return next;
+}
+
 type ChunkManifest = {
   gen: string;
   count: number;
@@ -58,20 +72,22 @@ const secureStoreAdapter = {
       return typeof localStorage !== "undefined" ? localStorage.getItem(key) : null;
     }
 
-    const manifest = parseManifest(await SecureStore.getItemAsync(`${key}.chunks`));
-    if (manifest) {
-      const parts = await Promise.all(
-        Array.from({ length: manifest.count }, (_, i) =>
-          SecureStore.getItemAsync(chunkKey(key, manifest.gen, i)),
-        ),
-      );
-      if (parts.some((part) => part === null)) {
-        return null;
+    return enqueueKeyOp(key, async () => {
+      const manifest = parseManifest(await SecureStore.getItemAsync(`${key}.chunks`));
+      if (manifest) {
+        const parts = await Promise.all(
+          Array.from({ length: manifest.count }, (_, i) =>
+            SecureStore.getItemAsync(chunkKey(key, manifest.gen, i)),
+          ),
+        );
+        if (parts.some((part) => part === null)) {
+          return null;
+        }
+        return parts.join("");
       }
-      return parts.join("");
-    }
 
-    return SecureStore.getItemAsync(key);
+      return SecureStore.getItemAsync(key);
+    });
   },
 
   async setItem(key: string, value: string): Promise<void> {
@@ -82,31 +98,33 @@ const secureStoreAdapter = {
       return;
     }
 
-    const previousManifest = parseManifest(await SecureStore.getItemAsync(`${key}.chunks`));
+    return enqueueKeyOp(key, async () => {
+      const previousManifest = parseManifest(await SecureStore.getItemAsync(`${key}.chunks`));
 
-    if (value.length <= CHUNK_SIZE) {
-      await SecureStore.setItemAsync(key, value);
-      await SecureStore.deleteItemAsync(`${key}.chunks`);
+      if (value.length <= CHUNK_SIZE) {
+        await SecureStore.setItemAsync(key, value);
+        await SecureStore.deleteItemAsync(`${key}.chunks`);
+        await deleteManifestChunks(key, previousManifest);
+        return;
+      }
+
+      const chunks: string[] = [];
+      for (let offset = 0; offset < value.length; offset += CHUNK_SIZE) {
+        chunks.push(value.slice(offset, offset + CHUNK_SIZE));
+      }
+
+      const gen = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+      await Promise.all(
+        chunks.map((chunk, index) => SecureStore.setItemAsync(chunkKey(key, gen, index), chunk)),
+      );
+      await SecureStore.setItemAsync(
+        `${key}.chunks`,
+        JSON.stringify({ gen, count: chunks.length } satisfies ChunkManifest),
+      );
+      await SecureStore.deleteItemAsync(key);
       await deleteManifestChunks(key, previousManifest);
-      return;
-    }
-
-    const chunks: string[] = [];
-    for (let offset = 0; offset < value.length; offset += CHUNK_SIZE) {
-      chunks.push(value.slice(offset, offset + CHUNK_SIZE));
-    }
-
-    const gen = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-
-    await Promise.all(
-      chunks.map((chunk, index) => SecureStore.setItemAsync(chunkKey(key, gen, index), chunk)),
-    );
-    await SecureStore.setItemAsync(
-      `${key}.chunks`,
-      JSON.stringify({ gen, count: chunks.length } satisfies ChunkManifest),
-    );
-    await SecureStore.deleteItemAsync(key);
-    await deleteManifestChunks(key, previousManifest);
+    });
   },
 
   async removeItem(key: string): Promise<void> {
@@ -117,12 +135,14 @@ const secureStoreAdapter = {
       return;
     }
 
-    const manifest = parseManifest(await SecureStore.getItemAsync(`${key}.chunks`));
-    await Promise.all([
-      SecureStore.deleteItemAsync(key),
-      SecureStore.deleteItemAsync(`${key}.chunks`),
-      deleteManifestChunks(key, manifest),
-    ]);
+    return enqueueKeyOp(key, async () => {
+      const manifest = parseManifest(await SecureStore.getItemAsync(`${key}.chunks`));
+      await Promise.all([
+        SecureStore.deleteItemAsync(key),
+        SecureStore.deleteItemAsync(`${key}.chunks`),
+        deleteManifestChunks(key, manifest),
+      ]);
+    });
   },
 };
 

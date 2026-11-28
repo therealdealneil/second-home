@@ -71,6 +71,14 @@ export const UserStatusRowSchema = z.object({
 export type UserStatusRow = z.infer<typeof UserStatusRowSchema>;
 
 /**
+ * Returns true only when an account status permits onboarding/discovery access.
+ * Quarantined (pending activation or under review) and suspended accounts are blocked.
+ */
+export function isPermittedAccountStatus(status: ActivationStatus | null): boolean {
+  return status === "active" || status === "paused" || status === "pending_household";
+}
+
+/**
  * Normalizes a user-entered phone number into strict E.164 format.
  * 10-digit numbers without a leading `+` default to US (+1) for the San Antonio launch corridor.
  */

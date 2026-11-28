@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   INITIAL_APP_FLOW_STATE,
   appFlowReducer,
+  isPermittedAccountStatus,
   parsePersistedFlowSnapshot,
   serializeFlowSnapshot,
   type AppFlowAction,
@@ -113,9 +114,17 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
     if (!isHydrated || !hasResolvedSession || !getSupabaseClient()) {
       return;
     }
-    const isConfirmedSession = Boolean(authSession?.user?.phone_confirmed_at);
-    dispatch({ type: "RECONCILE_AUTH_SESSION", isAuthenticated: isConfirmedSession });
-  }, [authSession, hasResolvedSession, isHydrated]);
+    if (!authSession?.user) {
+      dispatch({ type: "RECONCILE_AUTH_SESSION", isAuthenticated: false });
+      return;
+    }
+    if (accountStatus === null) {
+      return;
+    }
+    const isConfirmedAndPermitted =
+      Boolean(authSession.user.phone_confirmed_at) && isPermittedAccountStatus(accountStatus);
+    dispatch({ type: "RECONCILE_AUTH_SESSION", isAuthenticated: isConfirmedAndPermitted });
+  }, [accountStatus, authSession, hasResolvedSession, isHydrated]);
 
   useEffect(() => {
     let cancelled = false;
@@ -197,6 +206,7 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
   const completeAuth = useCallback(
     (status?: ActivationStatus) => {
       if (status) {
+        authSyncGenerationRef.current += 1;
         setAccountStatus(status);
       }
       trackedDispatch({ type: "COMPLETE_AUTH" });

@@ -13,6 +13,7 @@ import {
   MAX_HOMETOWN_RADIUS_METERS,
   MIN_HOUSEHOLDS_PER_HEX,
   OtpCodeSchema,
+  isPermittedAccountStatus,
   normalizePhoneE164,
 } from "./enums";
 
@@ -79,5 +80,14 @@ describe("phone & OTP validation", () => {
     expect(OtpCodeSchema.safeParse("123456").success).toBe(true);
     expect(OtpCodeSchema.safeParse("12345").success).toBe(false);
     expect(OtpCodeSchema.safeParse("12345a").success).toBe(false);
+  });
+
+  it("permits only active, paused, and pending_household account statuses", () => {
+    expect(isPermittedAccountStatus("active")).toBe(true);
+    expect(isPermittedAccountStatus("paused")).toBe(true);
+    expect(isPermittedAccountStatus("pending_household")).toBe(true);
+    expect(isPermittedAccountStatus("quarantined")).toBe(false);
+    expect(isPermittedAccountStatus("suspended")).toBe(false);
+    expect(isPermittedAccountStatus(null)).toBe(false);
   });
 });
