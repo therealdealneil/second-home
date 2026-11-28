@@ -218,6 +218,9 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
 
   const completeAuth = useCallback(
     (status?: ActivationStatus, userId?: string) => {
+      if (userId && userId !== currentUserIdRef.current) {
+        return;
+      }
       if (status) {
         authSyncGenerationRef.current += 1;
         const resolvedUserId = userId ?? currentUserIdRef.current;
