@@ -121,6 +121,36 @@ describe("appFlowReducer Flow B -> Soft Auth -> Flow C", () => {
     expect(afterAuth.phase).toBe("personalize");
   });
 
+  it("reconciles isAuthenticated with restored or signed-out Supabase sessions", () => {
+    const signedOutFromDiscovery = appFlowReducer(
+      {
+        ...INITIAL_APP_FLOW_STATE,
+        phase: "discovery",
+        confirmedNeighborhood: MEDICAL_CENTER,
+        selectedOrigin: AHMEDABAD,
+        isAuthenticated: true,
+        hasCompletedPersonalization: true,
+      },
+      { type: "RECONCILE_AUTH_SESSION", isAuthenticated: false },
+    );
+    expect(signedOutFromDiscovery.isAuthenticated).toBe(false);
+    expect(signedOutFromDiscovery.phase).toBe("blurred_preview");
+
+    const restoredSession = appFlowReducer(
+      {
+        ...INITIAL_APP_FLOW_STATE,
+        phase: "blurred_preview",
+        confirmedNeighborhood: MEDICAL_CENTER,
+        selectedOrigin: AHMEDABAD,
+        isAuthenticated: false,
+        hasCompletedPersonalization: false,
+      },
+      { type: "RECONCILE_AUTH_SESSION", isAuthenticated: true },
+    );
+    expect(restoredSession.isAuthenticated).toBe(true);
+    expect(restoredSession.phase).toBe("personalize");
+  });
+
   it("supports pre-auth editing of neighborhood and Gujarat origin", () => {
     const atOrigin = {
       ...INITIAL_APP_FLOW_STATE,

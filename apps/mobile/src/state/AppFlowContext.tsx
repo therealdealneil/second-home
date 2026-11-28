@@ -65,8 +65,10 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
   const [isHydrated, setIsHydrated] = useState(false);
   const [canPersist, setCanPersist] = useState(false);
   const [authSession, setAuthSession] = useState<Session | null>(null);
+  const [hasResolvedSession, setHasResolvedSession] = useState(() => getSupabaseClient() === null);
   const [accountStatus, setAccountStatus] = useState<ActivationStatus | null>(null);
   const userMutatedBeforeHydrationRef = useRef(false);
+  const authSyncGenerationRef = useRef(0);
 
   useEffect(() => {
     const supabase = getSupabaseClient();
@@ -77,16 +79,18 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     async function syncSession(session: Session | null) {
+      const generation = ++authSyncGenerationRef.current;
       if (cancelled) {
         return;
       }
       setAuthSession(session);
+      setHasResolvedSession(true);
       if (!session?.user) {
         setAccountStatus(null);
         return;
       }
       const nextStatus = await fetchCurrentAccountStatus(session.user.id);
-      if (!cancelled) {
+      if (!cancelled && generation === authSyncGenerationRef.current) {
         setAccountStatus(nextStatus);
       }
     }
@@ -104,6 +108,14 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
       subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!isHydrated || !hasResolvedSession || !getSupabaseClient()) {
+      return;
+    }
+    const isConfirmedSession = Boolean(authSession?.user?.phone_confirmed_at);
+    dispatch({ type: "RECONCILE_AUTH_SESSION", isAuthenticated: isConfirmedSession });
+  }, [authSession, hasResolvedSession, isHydrated]);
 
   useEffect(() => {
     let cancelled = false;
@@ -272,6 +284,7 @@ export function AppFlowProvider({ children }: { children: ReactNode }) {
   );
 
   const resetPrototypeFlow = useCallback(() => {
+    authSyncGenerationRef.current += 1;
     setCanPersist(true);
     setAuthSession(null);
     setAccountStatus(null);

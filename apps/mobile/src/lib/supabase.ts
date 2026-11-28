@@ -4,9 +4,53 @@ import { Platform } from "react-native";
 
 const CHUNK_SIZE = 1800;
 
+type ChunkManifest = {
+  gen: string;
+  count: number;
+};
+
+function parseManifest(raw: string | null): ChunkManifest | null {
+  if (!raw) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw) as Partial<ChunkManifest>;
+    if (
+      typeof parsed.gen === "string" &&
+      parsed.gen.length > 0 &&
+      typeof parsed.count === "number" &&
+      Number.isInteger(parsed.count) &&
+      parsed.count > 0
+    ) {
+      return { gen: parsed.gen, count: parsed.count };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function chunkKey(baseKey: string, gen: string, index: number): string {
+  return `${baseKey}.g.${gen}.chunk.${index}`;
+}
+
+async function deleteManifestChunks(
+  baseKey: string,
+  manifest: ChunkManifest | null,
+): Promise<void> {
+  if (!manifest) {
+    return;
+  }
+  await Promise.all(
+    Array.from({ length: manifest.count }, (_, i) =>
+      SecureStore.deleteItemAsync(chunkKey(baseKey, manifest.gen, i)),
+    ),
+  );
+}
+
 /**
- * Chunked SecureStore adapter so Supabase JWT sessions (which frequently exceed
- * the 2048-byte SecureStore per-item limit) persist safely in Keychain / Keystore.
+ * Generation-scoped chunked SecureStore adapter so Supabase JWT sessions (which frequently
+ * exceed the 2048-byte SecureStore per-item limit) persist atomically in Keychain / Keystore.
  */
 const secureStoreAdapter = {
   async getItem(key: string): Promise<string | null> {
@@ -14,14 +58,12 @@ const secureStoreAdapter = {
       return typeof localStorage !== "undefined" ? localStorage.getItem(key) : null;
     }
 
-    const chunkCountRaw = await SecureStore.getItemAsync(`${key}.chunks`);
-    if (chunkCountRaw !== null) {
-      const chunkCount = Number.parseInt(chunkCountRaw, 10);
-      if (!Number.isFinite(chunkCount) || chunkCount <= 0) {
-        return null;
-      }
+    const manifest = parseManifest(await SecureStore.getItemAsync(`${key}.chunks`));
+    if (manifest) {
       const parts = await Promise.all(
-        Array.from({ length: chunkCount }, (_, i) => SecureStore.getItemAsync(`${key}.chunk.${i}`)),
+        Array.from({ length: manifest.count }, (_, i) =>
+          SecureStore.getItemAsync(chunkKey(key, manifest.gen, i)),
+        ),
       );
       if (parts.some((part) => part === null)) {
         return null;
@@ -40,15 +82,12 @@ const secureStoreAdapter = {
       return;
     }
 
-    const previousCountRaw = await SecureStore.getItemAsync(`${key}.chunks`);
-    const previousCount = previousCountRaw ? Number.parseInt(previousCountRaw, 10) : 0;
+    const previousManifest = parseManifest(await SecureStore.getItemAsync(`${key}.chunks`));
 
     if (value.length <= CHUNK_SIZE) {
       await SecureStore.setItemAsync(key, value);
       await SecureStore.deleteItemAsync(`${key}.chunks`);
-      for (let i = 0; i < previousCount; i++) {
-        await SecureStore.deleteItemAsync(`${key}.chunk.${i}`);
-      }
+      await deleteManifestChunks(key, previousManifest);
       return;
     }
 
@@ -57,15 +96,17 @@ const secureStoreAdapter = {
       chunks.push(value.slice(offset, offset + CHUNK_SIZE));
     }
 
-    await Promise.all(
-      chunks.map((chunk, index) => SecureStore.setItemAsync(`${key}.chunk.${index}`, chunk)),
-    );
-    await SecureStore.setItemAsync(`${key}.chunks`, String(chunks.length));
-    await SecureStore.deleteItemAsync(key);
+    const gen = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
-    for (let i = chunks.length; i < previousCount; i++) {
-      await SecureStore.deleteItemAsync(`${key}.chunk.${i}`);
-    }
+    await Promise.all(
+      chunks.map((chunk, index) => SecureStore.setItemAsync(chunkKey(key, gen, index), chunk)),
+    );
+    await SecureStore.setItemAsync(
+      `${key}.chunks`,
+      JSON.stringify({ gen, count: chunks.length } satisfies ChunkManifest),
+    );
+    await SecureStore.deleteItemAsync(key);
+    await deleteManifestChunks(key, previousManifest);
   },
 
   async removeItem(key: string): Promise<void> {
@@ -76,15 +117,11 @@ const secureStoreAdapter = {
       return;
     }
 
-    const chunkCountRaw = await SecureStore.getItemAsync(`${key}.chunks`);
-    const chunkCount = chunkCountRaw ? Number.parseInt(chunkCountRaw, 10) : 0;
-
+    const manifest = parseManifest(await SecureStore.getItemAsync(`${key}.chunks`));
     await Promise.all([
       SecureStore.deleteItemAsync(key),
       SecureStore.deleteItemAsync(`${key}.chunks`),
-      ...Array.from({ length: chunkCount }, (_, i) =>
-        SecureStore.deleteItemAsync(`${key}.chunk.${i}`),
-      ),
+      deleteManifestChunks(key, manifest),
     ]);
   },
 };

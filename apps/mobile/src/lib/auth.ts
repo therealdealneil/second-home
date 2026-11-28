@@ -208,10 +208,10 @@ export async function activateVerifiedAccount(): Promise<{
   return parsedResponse.data;
 }
 
-export async function verifyTwilioPhoneOtpAndActivate(params: {
+export async function verifyTwilioPhoneOtp(params: {
   rawPhone: string;
   otpCode: string;
-}): Promise<{ status: ActivationStatus; phoneVerified: true }> {
+}): Promise<User> {
   const normalized = normalizePhoneE164(params.rawPhone);
   if (!normalized) {
     throw new Error("Enter a valid phone number (e.g. +1 210 555 0199).");
@@ -233,7 +233,7 @@ export async function verifyTwilioPhoneOtpAndActivate(params: {
     throw new Error(verifyError?.message ?? "Invalid or expired verification code.");
   }
 
-  return activateVerifiedAccount();
+  return verifyData.user;
 }
 
 export async function fetchCurrentAccountStatus(userId: string): Promise<ActivationStatus | null> {
@@ -260,7 +260,12 @@ export async function fetchCurrentAccountStatus(userId: string): Promise<Activat
 export async function signOutAuthProviders(): Promise<void> {
   const supabase = getSupabaseClient();
   if (supabase) {
-    await supabase.auth.signOut().catch(() => {});
+    const { error } = await supabase.auth.signOut({ scope: "local" }).catch((err) => ({
+      error: err,
+    }));
+    if (error) {
+      // Local storage is already cleared by scope: "local" when possible; ignore reset errors.
+    }
   }
   await GoogleSignin.signOut().catch(() => {});
 }

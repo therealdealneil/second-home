@@ -20,7 +20,7 @@ import {
   sendTwilioPhoneOtp,
   signInWithApple,
   signInWithGoogle,
-  verifyTwilioPhoneOtpAndActivate,
+  verifyTwilioPhoneOtp,
 } from "@/lib/auth";
 import { dismissOrReturnHome } from "@/lib/navigation";
 import { isSupabaseConfigured } from "@/lib/supabase";
@@ -45,6 +45,7 @@ export default function SoftAuthSheet() {
   const [phoneInput, setPhoneInput] = useState("");
   const [sentPhoneE164, setSentPhoneE164] = useState<string | null>(null);
   const [otpCode, setOtpCode] = useState("");
+  const [otpVerified, setOtpVerified] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -121,10 +122,14 @@ export default function SoftAuthSheet() {
     setAuthError(null);
     setLoadingAction("verify_otp");
     try {
-      const result = await verifyTwilioPhoneOtpAndActivate({
-        rawPhone: sentPhoneE164 ?? phoneInput,
-        otpCode,
-      });
+      if (!otpVerified) {
+        await verifyTwilioPhoneOtp({
+          rawPhone: sentPhoneE164 ?? phoneInput,
+          otpCode,
+        });
+        setOtpVerified(true);
+      }
+      const result = await activateVerifiedAccount();
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       completeAuth(result.status);
       dismissOrReturnHome(router);
@@ -223,6 +228,7 @@ export default function SoftAuthSheet() {
               onChangeText={(txt) => {
                 setPhoneInput(txt);
                 setAuthError(null);
+                setOtpVerified(false);
                 if (sentPhoneE164) {
                   setSentPhoneE164(null);
                 }
@@ -281,7 +287,9 @@ export default function SoftAuthSheet() {
                   {loadingAction === "verify_otp" ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />
                   ) : (
-                    <Text style={styles.primaryButtonText}>Verify & Unlock</Text>
+                    <Text style={styles.primaryButtonText}>
+                      {otpVerified ? "Retry Activation" : "Verify & Unlock"}
+                    </Text>
                   )}
                 </Pressable>
               </>
