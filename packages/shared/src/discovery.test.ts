@@ -35,6 +35,7 @@ describe("icebreaker anti-abuse validation", () => {
     expect(validateIcebreaker("Join t.me/mygroup").ok).toBe(false);
 
     expect(validateIcebreaker("Call +1 (210) 555-0199").ok).toBe(false);
+    expect(validateIcebreaker("Call +1 (210) 555 - 1234").ok).toBe(false);
     expect(validateIcebreaker("Call (210) 555-0199").ok).toBe(false);
     expect(validateIcebreaker("Text me 210 555 0199").ok).toBe(false);
     expect(validateIcebreaker("My number is 2105550199").ok).toBe(false);

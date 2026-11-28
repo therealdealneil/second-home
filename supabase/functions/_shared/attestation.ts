@@ -84,7 +84,7 @@ function concatBytes(a: Uint8Array, b: Uint8Array): Uint8Array {
   return out;
 }
 
-type CborValue = string | Uint8Array | number | Map<string, CborValue>;
+type CborValue = string | Uint8Array | number | CborValue[] | Map<string | number, CborValue>;
 
 function readCborLength(bytes: Uint8Array, pos: number, additional: number): [number, number] {
   if (additional < 24) {
@@ -120,6 +120,10 @@ function decodeCborItem(bytes: Uint8Array, offset: number): [CborValue, number] 
     const [val, next] = readCborLength(bytes, pos, additional);
     return [val, next];
   }
+  if (major === 1) {
+    const [val, next] = readCborLength(bytes, pos, additional);
+    return [-1 - val, next];
+  }
   if (major === 2) {
     const [len, next] = readCborLength(bytes, pos, additional);
     if (next + len > bytes.length) throw new Error("CBOR byte string truncated");
@@ -131,15 +135,26 @@ function decodeCborItem(bytes: Uint8Array, offset: number): [CborValue, number] 
     const text = new TextDecoder().decode(bytes.slice(next, next + len));
     return [text, next + len];
   }
+  if (major === 4) {
+    const [count, nextStart] = readCborLength(bytes, pos, additional);
+    pos = nextStart;
+    const arr: CborValue[] = [];
+    for (let i = 0; i < count; i++) {
+      const [item, afterItem] = decodeCborItem(bytes, pos);
+      arr.push(item);
+      pos = afterItem;
+    }
+    return [arr, pos];
+  }
   if (major === 5) {
     const [count, nextStart] = readCborLength(bytes, pos, additional);
     pos = nextStart;
-    const map = new Map<string, CborValue>();
+    const map = new Map<string | number, CborValue>();
     for (let i = 0; i < count; i++) {
       const [key, afterKey] = decodeCborItem(bytes, pos);
       const [val, afterVal] = decodeCborItem(bytes, afterKey);
-      if (typeof key !== "string") {
-        throw new Error("CBOR map key must be text");
+      if (typeof key !== "string" && typeof key !== "number") {
+        throw new Error("CBOR map key must be text or integer");
       }
       map.set(key, val);
       pos = afterVal;
@@ -344,11 +359,19 @@ async function verifyAppleAppAttest(
       };
     }
 
-    await deps.redis.setEx(
+    const advanced = await deps.redis.compareAndAdvanceCounter(
       redisKey,
+      signCount,
       60 * 60 * 24 * 365,
-      JSON.stringify({ publicKeySpkiBase64: stored.publicKeySpkiBase64, signCount }),
     );
+    if (!advanced) {
+      return {
+        ok: false,
+        status: 403,
+        error: "attestation_replay",
+        message: "Device attestation counter is stale.",
+      };
+    }
     return { ok: true, mode: "enforce" };
   } catch {
     return {
@@ -368,12 +391,210 @@ function pemToDerBytes(pem: string): Uint8Array {
   return base64ToBytes(stripped);
 }
 
+const GOOGLE_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
+const APPLE_ATTEST_OID_BYTES = new Uint8Array([
+  0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x63, 0x64, 0x08, 0x02,
+]);
+
+function findByteSubsequence(haystack: Uint8Array, needle: Uint8Array, start = 0): number {
+  outer: for (let i = start; i <= haystack.length - needle.length; i++) {
+    for (let j = 0; j < needle.length; j++) {
+      if (haystack[i + j] !== needle[j]) {
+        continue outer;
+      }
+    }
+    return i;
+  }
+  return -1;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i] ?? 0);
+  }
+  return btoa(binary);
+}
+
+/**
+ * Enrolls an Apple App Attest keypair after validating the attestationObject
+ * (format, RP ID hash, signCount === 0, credentialId === SHA-256(publicKey),
+ * leaf certificate Apple App Attest extension nonce) and stores it with SET NX.
+ */
+export async function registerAppleAppAttestKey(params: {
+  userId: string;
+  keyId: string;
+  attestationObjectBase64: string;
+  nonce: string;
+  deps: AttestationDeps;
+}): Promise<{ ok: true } | { ok: false; status: 403 | 409 | 503; error: string; message: string }> {
+  const { userId, keyId, attestationObjectBase64, nonce, deps } = params;
+
+  const nonceKey = `auth_nonce:${userId}:${nonce}`;
+  let consumed: string | null;
+  try {
+    consumed = await deps.redis.getDel(nonceKey);
+  } catch {
+    return {
+      ok: false,
+      status: 503,
+      error: "attestation_unavailable",
+      message: "Unable to verify challenge nonce right now.",
+    };
+  }
+  if (!consumed) {
+    return {
+      ok: false,
+      status: 403,
+      error: "invalid_or_expired_nonce",
+      message: "Challenge nonce is missing, expired, or already used.",
+    };
+  }
+
+  if (!deps.appleAppId) {
+    return {
+      ok: false,
+      status: 403,
+      error: "attestation_failed",
+      message: "Device attestation verification failed.",
+    };
+  }
+
+  try {
+    const attBytes = base64ToBytes(attestationObjectBase64);
+    const [decoded, endOffset] = decodeCborItem(attBytes, 0);
+    if (endOffset !== attBytes.length || !(decoded instanceof Map)) {
+      throw new Error("Invalid attestationObject CBOR");
+    }
+
+    const fmt = decoded.get("fmt");
+    const attStmt = decoded.get("attStmt");
+    const authData = decoded.get("authData");
+    if (
+      fmt !== "apple-appattest" ||
+      !(attStmt instanceof Map) ||
+      !(authData instanceof Uint8Array) ||
+      authData.length < 55
+    ) {
+      throw new Error("Invalid Apple attestation fields");
+    }
+
+    const x5c = attStmt.get("x5c");
+    if (!Array.isArray(x5c) || x5c.length === 0 || !(x5c[0] instanceof Uint8Array)) {
+      throw new Error("Missing x5c certificate chain");
+    }
+    const leafCert = x5c[0];
+
+    const expectedRpIdHash = await sha256Bytes(deps.appleAppId);
+    if (!constantTimeEqual(authData.slice(0, 32), expectedRpIdHash)) {
+      throw new Error("RP ID hash mismatch");
+    }
+
+    const signCount = new DataView(authData.buffer, authData.byteOffset + 33, 4).getUint32(
+      0,
+      false,
+    );
+    if (signCount !== 0) {
+      throw new Error("Initial signCount must be 0");
+    }
+
+    const credIdLen = new DataView(authData.buffer, authData.byteOffset + 53, 2).getUint16(
+      0,
+      false,
+    );
+    const credIdEnd = 55 + credIdLen;
+    if (credIdLen !== 32 || credIdEnd >= authData.length) {
+      throw new Error("Invalid credentialId length");
+    }
+    const credId = authData.slice(55, credIdEnd);
+    const keyIdBytes = base64ToBytes(keyId);
+    if (!constantTimeEqual(credId, keyIdBytes)) {
+      throw new Error("keyId does not match credentialId");
+    }
+
+    const [coseKey] = decodeCborItem(authData, credIdEnd);
+    if (!(coseKey instanceof Map)) {
+      throw new Error("Invalid COSE key");
+    }
+    const kty = coseKey.get(1);
+    const crv = coseKey.get(-1);
+    const xCoord = coseKey.get(-2);
+    const yCoord = coseKey.get(-3);
+    if (
+      kty !== 2 ||
+      crv !== 1 ||
+      !(xCoord instanceof Uint8Array) ||
+      !(yCoord instanceof Uint8Array) ||
+      xCoord.length !== 32 ||
+      yCoord.length !== 32
+    ) {
+      throw new Error("Unsupported COSE key parameters");
+    }
+
+    const rawUncompressed = new Uint8Array(65);
+    rawUncompressed[0] = 0x04;
+    rawUncompressed.set(xCoord, 1);
+    rawUncompressed.set(yCoord, 33);
+
+    const pubKeyHash = await sha256Bytes(rawUncompressed);
+    if (!constantTimeEqual(pubKeyHash, credId)) {
+      throw new Error("Credential ID does not match public key hash");
+    }
+
+    const clientDataHash = await sha256Bytes(nonce);
+    const expectedCertNonce = await sha256Bytes(concatBytes(authData, clientDataHash));
+    const oidIndex = findByteSubsequence(leafCert, APPLE_ATTEST_OID_BYTES);
+    if (oidIndex === -1) {
+      throw new Error("Missing Apple App Attest extension OID");
+    }
+    const nonceMarker = concatBytes(new Uint8Array([0x04, 0x20]), expectedCertNonce);
+    const nonceIndex = findByteSubsequence(leafCert, nonceMarker, oidIndex);
+    if (nonceIndex === -1) {
+      throw new Error("Leaf certificate nonce mismatch");
+    }
+
+    const imported = await crypto.subtle.importKey(
+      "raw",
+      rawUncompressed,
+      { name: "ECDSA", namedCurve: "P-256" },
+      true,
+      ["verify"],
+    );
+    const spki = new Uint8Array(await crypto.subtle.exportKey("spki", imported));
+    const redisKey = `app_attest_key:${userId}:${keyId}`;
+    const stored = await deps.redis.setNxEx(
+      redisKey,
+      60 * 60 * 24 * 365,
+      JSON.stringify({ publicKeySpkiBase64: bytesToBase64(spki), signCount: 0 }),
+    );
+    if (!stored) {
+      return {
+        ok: false,
+        status: 409,
+        error: "attestation_key_already_registered",
+        message: "Device attestation key is already registered.",
+      };
+    }
+
+    return { ok: true };
+  } catch {
+    return {
+      ok: false,
+      status: 403,
+      error: "attestation_failed",
+      message: "Device attestation key enrollment failed.",
+    };
+  }
+}
+
 async function mintGoogleAccessToken(
   serviceAccount: GoogleServiceAccount,
   fetchImpl: typeof fetch,
   nowMs: number,
 ): Promise<string | null> {
-  const tokenUri = serviceAccount.token_uri ?? "https://oauth2.googleapis.com/token";
+  if (serviceAccount.token_uri && serviceAccount.token_uri !== GOOGLE_OAUTH_TOKEN_URL) {
+    throw new Error("Invalid Google service account token_uri");
+  }
   const iat = Math.floor(nowMs / 1000);
   const exp = iat + 3600;
   const enc = new TextEncoder();
@@ -384,7 +605,7 @@ async function mintGoogleAccessToken(
       JSON.stringify({
         iss: serviceAccount.client_email,
         scope: "https://www.googleapis.com/auth/playintegrity",
-        aud: tokenUri,
+        aud: GOOGLE_OAUTH_TOKEN_URL,
         iat,
         exp,
       }),
@@ -405,8 +626,9 @@ async function mintGoogleAccessToken(
   const sigBuf = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", rsaKey, enc.encode(signingInput));
   const jwt = `${signingInput}.${base64UrlEncode(new Uint8Array(sigBuf))}`;
 
-  const res = await fetchImpl(tokenUri, {
+  const res = await fetchImpl(GOOGLE_OAUTH_TOKEN_URL, {
     method: "POST",
+    redirect: "error",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
@@ -442,6 +664,9 @@ async function verifyGooglePlayIntegrity(
     if (!serviceAccount.client_email || !serviceAccount.private_key) {
       throw new Error("Invalid service account JSON");
     }
+    if (serviceAccount.token_uri && serviceAccount.token_uri !== GOOGLE_OAUTH_TOKEN_URL) {
+      throw new Error("Invalid token_uri");
+    }
   } catch {
     return {
       ok: false,
@@ -451,6 +676,7 @@ async function verifyGooglePlayIntegrity(
     };
   }
 
+  let decodeRes: Response;
   try {
     const accessToken = await mintGoogleAccessToken(serviceAccount, fetchImpl, nowMs);
     if (!accessToken) {
@@ -462,10 +688,11 @@ async function verifyGooglePlayIntegrity(
       };
     }
 
-    const decodeRes = await fetchImpl(
+    decodeRes = await fetchImpl(
       `https://playintegrity.googleapis.com/v1/${encodeURIComponent(deps.googlePackageName)}:decodeIntegrityToken`,
       {
         method: "POST",
+        redirect: "error",
         headers: {
           Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
@@ -473,16 +700,34 @@ async function verifyGooglePlayIntegrity(
         body: JSON.stringify({ integrityToken: attestation.token }),
       },
     );
+  } catch {
+    return {
+      ok: false,
+      status: 503,
+      error: "attestation_unavailable",
+      message: "Unable to verify device integrity right now.",
+    };
+  }
 
-    if (!decodeRes.ok) {
-      return {
-        ok: false,
-        status: 403,
-        error: "attestation_failed",
-        message: "Device attestation verification failed.",
-      };
-    }
+  if (decodeRes.status >= 500 || decodeRes.status === 429) {
+    return {
+      ok: false,
+      status: 503,
+      error: "attestation_unavailable",
+      message: "Unable to verify device integrity right now.",
+    };
+  }
 
+  if (!decodeRes.ok) {
+    return {
+      ok: false,
+      status: 403,
+      error: "attestation_failed",
+      message: "Device attestation verification failed.",
+    };
+  }
+
+  try {
     const payload = (await decodeRes.json()) as {
       tokenPayloadExternal?: {
         requestDetails?: {

@@ -6,7 +6,8 @@ import {
   type AttestationDeps,
 } from "./_shared/attestation.ts";
 import { parsePostgisPoint } from "./_shared/geo.ts";
-import type { UpstashRedisClient } from "./_shared/redis.ts";
+import { parseJsonBody } from "./_shared/http.ts";
+import { createUpstashRedisClient, type UpstashRedisClient } from "./_shared/redis.ts";
 import type { AuthUser, EdgeDbAdapter, HouseholdRow, UserProfileRow } from "./_shared/supabase.ts";
 import { canonicalizeAttestationPayload } from "./_shared/validation.ts";
 import { createAuthChallengeHandler } from "./auth-challenge/handler.ts";
@@ -43,6 +44,14 @@ function createInMemoryRedis(initialNowMs = 1_700_000_000_000): {
       async setEx(key: string, ttlSeconds: number, value: string) {
         store.set(key, { value, expiresAtMs: nowMs + ttlSeconds * 1000 });
       },
+      async setNxEx(key: string, ttlSeconds: number, value: string) {
+        purgeExpired(key);
+        if (store.has(key)) {
+          return false;
+        }
+        store.set(key, { value, expiresAtMs: nowMs + ttlSeconds * 1000 });
+        return true;
+      },
       async getDel(key: string) {
         purgeExpired(key);
         const existing = store.get(key);
@@ -51,6 +60,25 @@ function createInMemoryRedis(initialNowMs = 1_700_000_000_000): {
         }
         store.delete(key);
         return existing.value;
+      },
+      async compareAndAdvanceCounter(key: string, newSignCount: number, ttlSeconds: number) {
+        purgeExpired(key);
+        const existing = store.get(key);
+        if (!existing) {
+          return false;
+        }
+        const parsed = JSON.parse(existing.value) as {
+          publicKeySpkiBase64: string;
+          signCount: number;
+        };
+        if (newSignCount <= parsed.signCount) {
+          return false;
+        }
+        store.set(key, {
+          value: JSON.stringify({ ...parsed, signCount: newSignCount }),
+          expiresAtMs: nowMs + ttlSeconds * 1000,
+        });
+        return true;
       },
       async slidingWindowLimit(key: string, limit: number, windowSeconds: number, ts = nowMs) {
         const windowMs = windowSeconds * 1000;
@@ -255,7 +283,16 @@ function createInMemoryDb(authUsers: Record<string, AuthUser>): {
     async getGujaratLocation(locationId: string) {
       return locations.get(locationId) ?? null;
     },
-    async createHousehold(input) {
+    async createHouseholdWithAdmin(input) {
+      if (failNextProfileInsert.value) {
+        failNextProfileInsert.value = false;
+        throw new Error("Simulated atomic creation failure");
+      }
+      if (users.has(input.userId)) {
+        const err = new Error("duplicate") as Error & { code?: string };
+        err.code = "23505";
+        throw err;
+      }
       const id = `00000000-0000-4000-8000-${String(hhSeq++).padStart(12, "0")}`;
       const row: HouseholdRow = {
         id,
@@ -269,10 +306,21 @@ function createInMemoryDb(authUsers: Record<string, AuthUser>): {
         is_verified_local: false,
       };
       households.set(id, row);
-      return row;
-    },
-    async deleteHousehold(householdId: string) {
-      households.delete(householdId);
+      users.set(input.userId, {
+        id: input.userId,
+        household_id: id,
+        status: input.status,
+        last_verified_at: input.lastVerifiedAt,
+      });
+      return {
+        id: row.id,
+        display_label: row.display_label,
+        life_stage: row.life_stage,
+        h3_index_res7: row.h3_index_res7,
+        neighborhood_name: row.neighborhood_name,
+        invite_code: row.invite_code,
+        is_verified_local: row.is_verified_local,
+      };
     },
     async createUserProfile(input) {
       if (failNextProfileInsert.value) {
@@ -566,13 +614,27 @@ describe("Edge Function handlers", () => {
       mode: "dev_bypass",
     };
 
-    const hh = await db.createHousehold({
+    // Seed household via createHouseholdWithAdmin for proximity tests
+    const ADMIN_SEED = "99999999-9999-4999-8999-999999999999";
+    const hh = await db.createHouseholdWithAdmin({
       displayLabel: "Patel Household",
       lifeStage: "couple",
       exactPoint: { lat: 29.703, lng: -98.1245 }, // New Braunfels (NE edge of polygon)
       publicPoint: { lat: 29.71, lng: -98.13 },
       h3IndexRes7: "874880102ffffff",
       neighborhoodName: "New Braunfels",
+      userId: ADMIN_SEED,
+      firstName: "Seed",
+      avatarUrl: null,
+      phoneE164: "+12105559999",
+      ageBracket: "30s",
+      hometownName: "Alkapuri, Vadodara, Gujarat",
+      hometownDistrict: "Vadodara",
+      hometownPoint: { lat: 22.3119, lng: 73.1723 },
+      interests: [],
+      status: "active",
+      whatsappAlertsOptIn: false,
+      lastVerifiedAt: "2026-11-28T10:00:00.000Z",
     });
 
     const joinHandler = createJoinHouseholdHandler({
@@ -644,33 +706,45 @@ describe("Edge Function handlers", () => {
     const redis = createInMemoryRedis();
     const { db, households, users, connections } = createInMemoryDb(authUsers);
 
-    const hhA = await db.createHousehold({
+    const hhA = await db.createHouseholdWithAdmin({
       displayLabel: "A",
       lifeStage: "couple",
       exactPoint: { lat: 29.5124, lng: -98.5742 },
       publicPoint: { lat: 29.52, lng: -98.58 },
       h3IndexRes7: "874880102ffffff",
       neighborhoodName: "Medical Center",
+      userId: USER_A,
+      firstName: "Aarav",
+      avatarUrl: null,
+      phoneE164: "+12105550101",
+      ageBracket: "30s",
+      hometownName: "Alkapuri, Vadodara, Gujarat",
+      hometownDistrict: "Vadodara",
+      hometownPoint: { lat: 22.3119, lng: 73.1723 },
+      interests: [],
+      status: "active",
+      whatsappAlertsOptIn: false,
+      lastVerifiedAt: "2026-11-28T10:00:00.000Z",
     });
-    const hhB = await db.createHousehold({
+    const hhB = await db.createHouseholdWithAdmin({
       displayLabel: "B",
       lifeStage: "couple",
       exactPoint: { lat: 29.6472, lng: -98.4864 },
       publicPoint: { lat: 29.65, lng: -98.49 },
       h3IndexRes7: "874880103ffffff",
       neighborhoodName: "Stone Oak",
-    });
-    users.set(USER_A, {
-      id: USER_A,
-      household_id: hhA.id,
+      userId: USER_B,
+      firstName: "Diya",
+      avatarUrl: null,
+      phoneE164: "+12105550202",
+      ageBracket: "30s",
+      hometownName: "Vesu, Surat, Gujarat",
+      hometownDistrict: "Surat",
+      hometownPoint: { lat: 21.1418, lng: 72.7709 },
+      interests: [],
       status: "active",
-      last_verified_at: null,
-    });
-    users.set(USER_B, {
-      id: USER_B,
-      household_id: hhB.id,
-      status: "active",
-      last_verified_at: null,
+      whatsappAlertsOptIn: false,
+      lastVerifiedAt: "2026-11-28T10:00:00.000Z",
     });
 
     const rsa = await crypto.subtle.generateKey(
@@ -873,5 +947,263 @@ describe("Edge Function handlers", () => {
       }),
     );
     expect(rUrl.status).toBe(400);
+
+    const rFormattedPhone = await rlHandler(
+      new Request("https://edge.local/send-connection-request", {
+        method: "POST",
+        headers: { Authorization: "Bearer jwt-a", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          attestation: { platform: "android", nonce: nBlocked, token: "t", payloadHash },
+          recipientId: USER_B,
+          icebreakerText: "Call +1 (210) 555 - 1234",
+        }),
+      }),
+    );
+    expect(rFormattedPhone.status).toBe(400);
+  });
+
+  it("enforces streaming maxBytes, HTTPS Upstash URLs, redirect:error, Google 503 outage, and Apple key enrollment + atomic counter", async () => {
+    // 1. Streaming maxBytes without Content-Length -> 413
+    const largeStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("x".repeat(200)));
+        controller.close();
+      },
+    });
+    const streamReq = new Request("https://edge.local/test", {
+      method: "POST",
+      body: largeStream,
+      duplex: "half",
+    } as RequestInit);
+    const parsedStream = await parseJsonBody(streamReq, 64);
+    expect(parsedStream.ok).toBe(false);
+    if (!parsedStream.ok) {
+      expect(parsedStream.response.status).toBe(413);
+    }
+
+    // 2. Upstash Redis rejects non-HTTPS URLs and passes redirect: "error"
+    expect(() => createUpstashRedisClient("http://insecure.upstash.io", "tok")).toThrow();
+    let capturedRedirect: RequestRedirect | undefined;
+    const secureClient = createUpstashRedisClient(
+      "https://secure.upstash.io",
+      "tok",
+      async (_url, init) => {
+        capturedRedirect = init?.redirect;
+        return new Response(JSON.stringify({ result: "OK" }), { status: 200 });
+      },
+    );
+    await secureClient.setEx("k", 10, "v");
+    expect(capturedRedirect).toBe("error");
+
+    // 3. Google Play Integrity returns 503 on upstream 503
+    const redis = createInMemoryRedis();
+    const { db, users } = createInMemoryDb(authUsers);
+    const hhA = await db.createHouseholdWithAdmin({
+      displayLabel: "A",
+      lifeStage: "couple",
+      exactPoint: { lat: 29.5124, lng: -98.5742 },
+      publicPoint: { lat: 29.52, lng: -98.58 },
+      h3IndexRes7: "874880102ffffff",
+      neighborhoodName: "Medical Center",
+      userId: USER_A,
+      firstName: "Aarav",
+      avatarUrl: null,
+      phoneE164: "+12105550101",
+      ageBracket: "30s",
+      hometownName: "Alkapuri, Vadodara, Gujarat",
+      hometownDistrict: "Vadodara",
+      hometownPoint: { lat: 22.3119, lng: 73.1723 },
+      interests: [],
+      status: "active",
+      whatsappAlertsOptIn: false,
+      lastVerifiedAt: "2026-11-28T10:00:00.000Z",
+    });
+    const hhB = await db.createHouseholdWithAdmin({
+      displayLabel: "B",
+      lifeStage: "couple",
+      exactPoint: { lat: 29.6472, lng: -98.4864 },
+      publicPoint: { lat: 29.65, lng: -98.49 },
+      h3IndexRes7: "874880103ffffff",
+      neighborhoodName: "Stone Oak",
+      userId: USER_B,
+      firstName: "Diya",
+      avatarUrl: null,
+      phoneE164: "+12105550202",
+      ageBracket: "30s",
+      hometownName: "Vesu, Surat, Gujarat",
+      hometownDistrict: "Surat",
+      hometownPoint: { lat: 21.1418, lng: 72.7709 },
+      interests: [],
+      status: "active",
+      whatsappAlertsOptIn: false,
+      lastVerifiedAt: "2026-11-28T10:00:00.000Z",
+    });
+    expect(users.has(USER_A) && hhA.id && hhB.id).toBeTruthy();
+
+    const rsa = await crypto.subtle.generateKey(
+      {
+        name: "RSASSA-PKCS1-v1_5",
+        modulusLength: 2048,
+        publicExponent: new Uint8Array([1, 0, 1]),
+        hash: "SHA-256",
+      },
+      true,
+      ["sign", "verify"],
+    );
+    const pkcs8 = new Uint8Array(await crypto.subtle.exportKey("pkcs8", rsa.privateKey));
+    let pkcs8Bin = "";
+    for (const b of pkcs8) pkcs8Bin += String.fromCharCode(b);
+    const pem = `-----BEGIN PRIVATE KEY-----\n${btoa(pkcs8Bin)}\n-----END PRIVATE KEY-----`;
+
+    const connBody = { recipientId: USER_B, icebreakerText: "Kem cho!" };
+    const payloadHash = await sha256Hex(canonicalizeAttestationPayload(connBody));
+    const nOutage = "outage_nonce_12345678";
+    await redis.client.setEx(`auth_nonce:${USER_A}:${nOutage}`, 60, "1");
+
+    const outageHandler = createSendConnectionRequestHandler({
+      db,
+      redis: redis.client,
+      attestation: {
+        redis: redis.client,
+        mode: "enforce",
+        googlePackageName: "app.secondhome.mobile",
+        googleServiceAccountJson: JSON.stringify({
+          client_email: "play@secondhome.iam.gserviceaccount.com",
+          private_key: pem,
+        }),
+        fetchImpl: async (input) => {
+          const url = typeof input === "string" ? input : input.toString();
+          if (url.includes("oauth2.googleapis.com")) {
+            return new Response(JSON.stringify({ access_token: "ya29.mock" }), { status: 200 });
+          }
+          return new Response("Service Unavailable", { status: 503 });
+        },
+      },
+    });
+    const outageRes = await outageHandler(
+      new Request("https://edge.local/send-connection-request", {
+        method: "POST",
+        headers: { Authorization: "Bearer jwt-a", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          attestation: { platform: "android", nonce: nOutage, token: "t", payloadHash },
+          ...connBody,
+        }),
+      }),
+    );
+    expect(outageRes.status).toBe(503);
+
+    // 4. Apple App Attest key enrollment via POST /auth-challenge + atomic counter guard
+    const ecKey = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
+      "sign",
+      "verify",
+    ]);
+    const rawPub = new Uint8Array(await crypto.subtle.exportKey("raw", ecKey.publicKey));
+    const xCoord = rawPub.slice(1, 33);
+    const yCoord = rawPub.slice(33, 65);
+    const credId = await sha256Bytes(rawPub);
+    let keyIdBin = "";
+    for (const b of credId) keyIdBin += String.fromCharCode(b);
+    const keyId = btoa(keyIdBin);
+
+    const enc = new TextEncoder();
+    const cborBytes = (b: Uint8Array) => {
+      const header =
+        b.length < 24 ? new Uint8Array([0x40 | b.length]) : new Uint8Array([0x58, b.length]);
+      const out = new Uint8Array(header.length + b.length);
+      out.set(header, 0);
+      out.set(b, header.length);
+      return out;
+    };
+    const cborText = (t: string) => {
+      const b = enc.encode(t);
+      const out = new Uint8Array(1 + b.length);
+      out[0] = 0x60 | b.length;
+      out.set(b, 1);
+      return out;
+    };
+    const coseKeyCbor = new Uint8Array([
+      0xa5,
+      0x01,
+      0x02, // 1 (kty): 2 (EC2)
+      0x03,
+      0x26, // 3 (alg): -7 (ES256)
+      0x20,
+      0x01, // -1 (crv): 1 (P-256)
+      0x21,
+      ...cborBytes(xCoord), // -2 (x)
+      0x22,
+      ...cborBytes(yCoord), // -3 (y)
+    ]);
+
+    const rpIdHash = await sha256Bytes(APPLE_APP_ID);
+    const authData = new Uint8Array(55 + credId.length + coseKeyCbor.length);
+    authData.set(rpIdHash, 0);
+    authData[32] = 0x41; // AT + UP
+    new DataView(authData.buffer).setUint32(33, 0, false); // signCount = 0
+    new DataView(authData.buffer).setUint16(53, credId.length, false);
+    authData.set(credId, 55);
+    authData.set(coseKeyCbor, 55 + credId.length);
+
+    const regNonce = "reg_nonce_0123456789abcdef";
+    await redis.client.setEx(`auth_nonce:${USER_A}:${regNonce}`, 60, "1");
+    const certNonce = await sha256Bytes(
+      new Uint8Array([...authData, ...(await sha256Bytes(regNonce))]),
+    );
+    const mockLeafCert = new Uint8Array([
+      0x30,
+      0x30,
+      0x06,
+      0x09,
+      0x2a,
+      0x86,
+      0x48,
+      0x86,
+      0xf7,
+      0x63,
+      0x64,
+      0x08,
+      0x02,
+      0x04,
+      0x20,
+      ...certNonce,
+    ]);
+    const attObj = new Uint8Array([
+      0xa3,
+      ...cborText("fmt"),
+      ...cborText("apple-appattest"),
+      ...cborText("attStmt"),
+      0xa1,
+      ...cborText("x5c"),
+      0x81,
+      ...cborBytes(mockLeafCert),
+      ...cborText("authData"),
+      ...cborBytes(authData),
+    ]);
+    let attBin = "";
+    for (const b of attObj) attBin += String.fromCharCode(b);
+
+    const challengeHandler = createAuthChallengeHandler({
+      db,
+      redis: redis.client,
+      attestation: { redis: redis.client, mode: "enforce", appleAppId: APPLE_APP_ID },
+    });
+    const regRes = await challengeHandler(
+      new Request("https://edge.local/auth-challenge", {
+        method: "POST",
+        headers: { Authorization: "Bearer jwt-a", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "register_apple_key",
+          keyId,
+          attestationObject: btoa(attBin),
+          nonce: regNonce,
+        }),
+      }),
+    );
+    expect(regRes.status).toBe(201);
+
+    // Atomic counter advance: 1 succeeds, re-advancing to 1 fails
+    const redisKey = `app_attest_key:${USER_A}:${keyId}`;
+    expect(await redis.client.compareAndAdvanceCounter(redisKey, 1, 3600)).toBe(true);
+    expect(await redis.client.compareAndAdvanceCounter(redisKey, 1, 3600)).toBe(false);
   });
 });

@@ -1,8 +1,11 @@
+import { z } from "zod";
+import { registerAppleAppAttestKey, type AttestationDeps } from "../_shared/attestation.ts";
 import {
   errorResponse,
   extractBearerToken,
   handleCorsPreflight,
   jsonResponse,
+  parseJsonBody,
 } from "../_shared/http.ts";
 import type { UpstashRedisClient } from "../_shared/redis.ts";
 import type { EdgeDbAdapter } from "../_shared/supabase.ts";
@@ -11,8 +14,16 @@ import { AUTH_NONCE_TTL_SECONDS } from "../_shared/validation.ts";
 export type AuthChallengeDeps = {
   db: Pick<EdgeDbAdapter, "getAuthUser">;
   redis: UpstashRedisClient;
+  attestation?: AttestationDeps;
   nowMs?: () => number;
 };
+
+const RegisterAppleKeySchema = z.object({
+  action: z.literal("register_apple_key"),
+  keyId: z.string().trim().min(1).max(256),
+  attestationObject: z.string().trim().min(1).max(32_768),
+  nonce: z.string().trim().min(16).max(128),
+});
 
 function generateRandomNonceHex(byteLength = 32): string {
   const bytes = new Uint8Array(byteLength);
@@ -45,6 +56,34 @@ export function createAuthChallengeHandler(deps: AuthChallengeDeps) {
 
     if (!user) {
       return errorResponse(401, "unauthorized", "Invalid or expired session.");
+    }
+
+    if (req.method === "POST") {
+      const contentType = req.headers.get("content-type") ?? "";
+      if (contentType.toLowerCase().includes("application/json")) {
+        const bodyResult = await parseJsonBody(req);
+        if (!bodyResult.ok) {
+          return bodyResult.response;
+        }
+        const parsed = RegisterAppleKeySchema.safeParse(bodyResult.data);
+        if (!parsed.success) {
+          return errorResponse(400, "invalid_request", "Invalid Apple key enrollment payload.");
+        }
+        if (!deps.attestation) {
+          return errorResponse(503, "attestation_unavailable", "Key enrollment is not configured.");
+        }
+        const regResult = await registerAppleAppAttestKey({
+          userId: user.id,
+          keyId: parsed.data.keyId,
+          attestationObjectBase64: parsed.data.attestationObject,
+          nonce: parsed.data.nonce,
+          deps: deps.attestation,
+        });
+        if (!regResult.ok) {
+          return errorResponse(regResult.status, regResult.error, regResult.message);
+        }
+        return jsonResponse({ registered: true, keyId: parsed.data.keyId }, 201);
+      }
     }
 
     const nonce = generateRandomNonceHex(32);

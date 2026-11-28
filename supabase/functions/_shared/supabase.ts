@@ -38,15 +38,34 @@ export interface EdgeDbAdapter {
   getAuthUser(jwt: string): Promise<AuthUser | null>;
   getUserProfile(userId: string): Promise<UserProfileRow | null>;
   getGujaratLocation(locationId: string): Promise<GujaratLocationRow | null>;
-  createHousehold(input: {
+  createHouseholdWithAdmin(input: {
     displayLabel: string | null;
     lifeStage: string | null;
     exactPoint: LatLng;
     publicPoint: LatLng;
     h3IndexRes7: string;
     neighborhoodName: string;
-  }): Promise<HouseholdRow>;
-  deleteHousehold(householdId: string): Promise<void>;
+    userId: string;
+    firstName: string;
+    avatarUrl: string | null;
+    phoneE164: string;
+    ageBracket: string | null;
+    hometownName: string;
+    hometownDistrict: string;
+    hometownPoint: LatLng;
+    interests: string[];
+    status: "quarantined" | "active";
+    whatsappAlertsOptIn: boolean;
+    lastVerifiedAt: string;
+  }): Promise<{
+    id: string;
+    display_label: string | null;
+    life_stage: string | null;
+    h3_index_res7: string;
+    neighborhood_name: string | null;
+    invite_code: string;
+    is_verified_local: boolean;
+  }>;
   createUserProfile(input: {
     id: string;
     householdId: string;
@@ -96,7 +115,20 @@ export function createEdgeDbAdapter(supabaseUrl: string, serviceRoleKey: string)
   return {
     async getAuthUser(jwt: string): Promise<AuthUser | null> {
       const { data, error } = await client.auth.getUser(jwt);
-      if (error || !data.user) {
+      if (error) {
+        const status = (error as { status?: number }).status;
+        const name = (error as { name?: string }).name ?? "";
+        const isInfrastructureError =
+          name === "AuthRetryableFetchError" ||
+          status === undefined ||
+          status === 0 ||
+          status >= 500;
+        if (isInfrastructureError) {
+          throw new Error(`getAuthUser unavailable: ${status ?? name}`);
+        }
+        return null;
+      }
+      if (!data.user) {
         return null;
       }
       return {
@@ -129,29 +161,52 @@ export function createEdgeDbAdapter(supabaseUrl: string, serviceRoleKey: string)
       return (data as GujaratLocationRow | null) ?? null;
     },
 
-    async createHousehold(input): Promise<HouseholdRow> {
-      const { data, error } = await client
-        .from("households")
-        .insert({
-          display_label: input.displayLabel,
-          life_stage: input.lifeStage,
-          exact_current_geog: formatWktPoint(input.exactPoint),
-          public_current_geog: formatWktPoint(input.publicPoint),
-          h3_index_res7: input.h3IndexRes7,
-          neighborhood_name: input.neighborhoodName,
-        })
-        .select(
-          "id, display_label, life_stage, exact_current_geog, public_current_geog, h3_index_res7, neighborhood_name, invite_code, is_verified_local",
-        )
-        .single();
-      if (error || !data) {
-        throw new Error(`createHousehold failed: ${error?.code ?? "unknown"}`);
+    async createHouseholdWithAdmin(input) {
+      const { data, error } = await client.rpc("create_household_with_admin", {
+        p_display_label: input.displayLabel,
+        p_life_stage: input.lifeStage,
+        p_exact_lng: input.exactPoint.lng,
+        p_exact_lat: input.exactPoint.lat,
+        p_public_lng: input.publicPoint.lng,
+        p_public_lat: input.publicPoint.lat,
+        p_h3_index_res7: input.h3IndexRes7,
+        p_neighborhood_name: input.neighborhoodName,
+        p_user_id: input.userId,
+        p_first_name: input.firstName,
+        p_avatar_url: input.avatarUrl,
+        p_phone_e164: input.phoneE164,
+        p_age_bracket: input.ageBracket,
+        p_hometown_name: input.hometownName,
+        p_hometown_district: input.hometownDistrict,
+        p_hometown_lng: input.hometownPoint.lng,
+        p_hometown_lat: input.hometownPoint.lat,
+        p_interests: input.interests,
+        p_status: input.status,
+        p_whatsapp_alerts_opt_in: input.whatsappAlertsOptIn,
+        p_last_verified_at: input.lastVerifiedAt,
+      });
+      if (error) {
+        const err = new Error(
+          `createHouseholdWithAdmin failed: ${error.code ?? "unknown"}`,
+        ) as Error & {
+          code?: string;
+        };
+        err.code = error.code;
+        throw err;
       }
-      return data as HouseholdRow;
-    },
-
-    async deleteHousehold(householdId: string): Promise<void> {
-      await client.from("households").delete().eq("id", householdId);
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) {
+        throw new Error("createHouseholdWithAdmin returned no row");
+      }
+      return row as {
+        id: string;
+        display_label: string | null;
+        life_stage: string | null;
+        h3_index_res7: string;
+        neighborhood_name: string | null;
+        invite_code: string;
+        is_verified_local: boolean;
+      };
     },
 
     async createUserProfile(input): Promise<void> {
@@ -226,7 +281,12 @@ export function createEdgeDbAdapter(supabaseUrl: string, serviceRoleKey: string)
         .from("users")
         .select("id")
         .eq("household_id", targetHouseholdId);
-      if (membersErr || !members || members.length === 0) {
+      if (membersErr) {
+        throw new Error(
+          `hasBlockedConnectionWithHousehold failed: ${membersErr.code ?? "unknown"}`,
+        );
+      }
+      if (!members || members.length === 0) {
         return false;
       }
       const memberIds = (members as Array<{ id: string }>).map((m) => m.id);

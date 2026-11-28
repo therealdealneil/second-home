@@ -3,7 +3,7 @@ import { createAuthChallengeHandler } from "./handler.ts";
 
 Deno.serve(
   withEdgeErrorBoundary((req) => {
-    const { db, redis } = loadEdgeRuntimeEnv({ needAttestation: false });
-    return createAuthChallengeHandler({ db, redis })(req);
+    const { db, redis, attestation } = loadEdgeRuntimeEnv({ needAttestation: true });
+    return createAuthChallengeHandler({ db, redis, attestation })(req);
   }),
 );

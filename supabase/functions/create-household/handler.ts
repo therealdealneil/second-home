@@ -101,25 +101,16 @@ export function createCreateHouseholdHandler(deps: CreateHouseholdDeps) {
     const h3IndexRes7 = deps.latLngToH3Res7(fuzzedCenter.lat, fuzzedCenter.lng);
     const neighborhoodName = inferSanAntonioNeighborhood(fuzzedCenter);
 
-    let createdHousehold: Awaited<ReturnType<typeof deps.db.createHousehold>>;
+    let createdHousehold: Awaited<ReturnType<typeof deps.db.createHouseholdWithAdmin>>;
     try {
-      createdHousehold = await deps.db.createHousehold({
+      createdHousehold = await deps.db.createHouseholdWithAdmin({
         displayLabel: parsed.data.displayLabel ?? `${parsed.data.firstName}'s Household`,
         lifeStage: parsed.data.lifeStage ?? null,
         exactPoint,
         publicPoint: fuzzedCenter,
         h3IndexRes7,
         neighborhoodName,
-      });
-    } catch {
-      return errorResponse(500, "create_household_failed", "Unable to create household.");
-    }
-
-    try {
-      await deps.db.createUserProfile({
-        id: authUser.id,
-        householdId: createdHousehold.id,
-        isHouseholdAdmin: true,
+        userId: authUser.id,
         firstName: parsed.data.firstName,
         avatarUrl: parsed.data.avatarUrl ?? null,
         phoneE164: gate.phoneE164,
@@ -133,7 +124,6 @@ export function createCreateHouseholdHandler(deps: CreateHouseholdDeps) {
         lastVerifiedAt: new Date(gate.nowMs).toISOString(),
       });
     } catch (err) {
-      await deps.db.deleteHousehold(createdHousehold.id).catch(() => undefined);
       const code = (err as { code?: string }).code;
       if (code === "23505") {
         return errorResponse(
@@ -142,7 +132,7 @@ export function createCreateHouseholdHandler(deps: CreateHouseholdDeps) {
           "Account already belongs to a household.",
         );
       }
-      return errorResponse(500, "create_profile_failed", "Unable to create member profile.");
+      return errorResponse(500, "create_household_failed", "Unable to create household.");
     }
 
     await recordLastGpsFix(deps.redis, authUser.id, exactPoint, gate.nowMs).catch(() => undefined);

@@ -33,7 +33,10 @@ export const PhoneE164Schema = z
 
 export const ICEBREAKER_MAX_LENGTH = 140;
 export const ICEBREAKER_URL_REGEX = /(https?:\/\/|(^|[^a-z0-9])(wa|t)\.me)/i;
-export const ICEBREAKER_PHONE_REGEX = /(\+?[0-9][ ().-]{0,2}){10,}/;
+
+export function hasBlockedPhoneNumber(text: string): boolean {
+  return /[0-9]{10,}/.test(text.replace(/[+() .-]/g, ""));
+}
 
 export const IcebreakerSchema = z
   .string()
@@ -43,7 +46,7 @@ export const IcebreakerSchema = z
   .refine((text) => !ICEBREAKER_URL_REGEX.test(text), {
     message: "Links (http, wa.me, t.me) are blocked before mutual acceptance.",
   })
-  .refine((text) => !ICEBREAKER_PHONE_REGEX.test(text), {
+  .refine((text) => !hasBlockedPhoneNumber(text), {
     message: "Phone numbers are blocked before mutual acceptance.",
   });
 

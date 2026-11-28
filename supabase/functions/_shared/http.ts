@@ -67,20 +67,59 @@ export async function parseJsonBody(
   }
 
   let rawText: string;
-  try {
-    rawText = await req.text();
-  } catch {
-    return {
-      ok: false,
-      response: errorResponse(400, "invalid_body", "Unable to read request body."),
-    };
-  }
+  if (req.body) {
+    const reader = req.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let totalBytes = 0;
 
-  if (new TextEncoder().encode(rawText).byteLength > maxBytes) {
-    return {
-      ok: false,
-      response: errorResponse(413, "payload_too_large", "Request body is too large."),
-    };
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        if (value) {
+          totalBytes += value.byteLength;
+          if (totalBytes > maxBytes) {
+            await reader.cancel().catch(() => undefined);
+            return {
+              ok: false,
+              response: errorResponse(413, "payload_too_large", "Request body is too large."),
+            };
+          }
+          chunks.push(value);
+        }
+      }
+    } catch {
+      return {
+        ok: false,
+        response: errorResponse(400, "invalid_body", "Unable to read request body."),
+      };
+    }
+
+    const combined = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      combined.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    rawText = new TextDecoder().decode(combined);
+  } else {
+    try {
+      rawText = await req.text();
+    } catch {
+      return {
+        ok: false,
+        response: errorResponse(400, "invalid_body", "Unable to read request body."),
+      };
+    }
+
+    if (new TextEncoder().encode(rawText).byteLength > maxBytes) {
+      return {
+        ok: false,
+        response: errorResponse(413, "payload_too_large", "Request body is too large."),
+      };
+    }
   }
 
   try {
